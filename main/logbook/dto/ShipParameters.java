@@ -67,6 +67,32 @@ public class ShipParameters {
     @Tag(13)
     private int leng;
 
+    public static String sokuToString(int soku) {
+        switch (soku) {
+        case 0:
+            return "陸上";
+        case 5:
+            return "低速";
+        case 10:
+            return "高速";
+        }
+        return "不明(" + soku + ")";
+    }
+
+    public static String lengToString(int leng) {
+        switch (leng) {
+        case 1:
+            return "短";
+        case 2:
+            return "中";
+        case 3:
+            return "長";
+        case 4:
+            return "超長";
+        }
+        return "不明(" + leng + ")";
+    }
+
     public ShipParameters() {
     }
 
@@ -128,6 +154,16 @@ public class ShipParameters {
         return ret;
     }
 
+    public static ShipParameters[] fromMasterEnemyShip(JsonObject object) {
+        ShipParameters[] ret = new ShipParameters[2];
+        for (int i = 0; i < 2; ++i) {
+            ShipParameters param = new ShipParameters();
+            param.soku = object.getJsonNumber("api_soku").intValue();
+            ret[i] = param;
+        }
+        return ret;
+    }
+
     /** 艦娘用 (現在値, MAX, 装備による上昇分) */
     public static ShipParameters[] fromShip(JsonObject object, List<ItemInfoDto> slotitem, ShipInfoDto masterShip) {
         ShipParameters[] ret = new ShipParameters[3];
@@ -165,7 +201,7 @@ public class ShipParameters {
     }
 
     /** 敵艦用 (装備込, 装備による上昇分) */
-    public static ShipParameters[] fromBaseAndSlotItem(ShipParameters base, List<ItemInfoDto> slotitem) {
+    public static ShipParameters[] fromBaseAndSlotItem(ShipParameters base, int[] param, List<ItemInfoDto> slotitem) {
         ShipParameters slotParam = new ShipParameters();
         ShipParameters total = new ShipParameters();
 
@@ -177,7 +213,12 @@ public class ShipParameters {
         }
 
         // 合計を計算
-        total.add(base);
+        if (param != null) {
+            total.add(base, param);
+        }
+        else {
+            total.add(base);
+        }
         total.add(slotParam);
 
         return new ShipParameters[] { total, slotParam };
@@ -195,6 +236,26 @@ public class ShipParameters {
         this.baku += o.baku;
         this.tyku += o.tyku;
         this.souk += o.souk;
+        this.kaih += o.kaih;
+        this.tais += o.tais;
+        this.saku += o.saku;
+        this.luck += o.luck;
+        this.leng = Math.max(this.leng, o.leng);
+        this.soku = Math.max(this.soku, o.soku);
+    }
+
+    /**
+     * パラメータoを自分に足す
+     * @param o　足すパラメータ
+     */
+    public void add(ShipParameters o, int[] param) {
+        this.taik += o.taik;
+        this.houg += param[0];
+        this.houm += o.houm;
+        this.raig += param[1];
+        this.baku += o.baku;
+        this.tyku += param[2];
+        this.souk += param[3];
         this.kaih += o.kaih;
         this.tais += o.tais;
         this.saku += o.saku;
@@ -475,6 +536,10 @@ public class ShipParameters {
         this.soku = soku;
     }
 
+    public String getSokuString() {
+        return sokuToString(this.soku);
+    }
+
     /**
      * @return leng
      */
@@ -487,6 +552,10 @@ public class ShipParameters {
      */
     public void setLeng(int leng) {
         this.leng = leng;
+    }
+
+    public String getLengString() {
+        return lengToString(this.leng);
     }
 
     /**

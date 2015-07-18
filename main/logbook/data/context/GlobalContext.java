@@ -57,7 +57,6 @@ import logbook.gui.logic.Sound;
 import logbook.internal.AkashiTimer;
 import logbook.internal.BattleResultServer;
 import logbook.internal.CondTiming;
-import logbook.internal.EnemyData;
 import logbook.internal.Item;
 import logbook.internal.LoggerHolder;
 import logbook.internal.MasterData;
@@ -1219,6 +1218,7 @@ public final class GlobalContext {
                     //battleResultList.add(battle);
                     CreateReportLogic.storeBattleResultReport(battle);
 
+                    /*
                     // EnemyData更新
                     if (mapCellDto != null) {
                         int enemyId = mapCellDto.getEnemyId();
@@ -1229,6 +1229,7 @@ public final class GlobalContext {
                         EnemyData.set(enemyId, enemyData);
                         mapCellDto.setEnemyData(enemyData);
                     }
+                    */
 
                     // ドロップ艦を追加
                     if (battle.isDropShip()) {
@@ -1427,7 +1428,7 @@ public final class GlobalContext {
             // 建造ドック更新
             doKdockSub(apidata.getJsonArray("api_kdock"));
 
-            state = checkDataState();
+            //state = checkDataState();
 
             addUpdateLog("建造(入手)情報を更新しました");
         } catch (Exception e) {
@@ -1467,7 +1468,7 @@ public final class GlobalContext {
             items.loadMaterialFronJson(newMaterial);
             updateDetailedMaterial("装備開発", items, MATERIAL_DIFF.NEW_VALUE);
 
-            state = checkDataState();
+            //state = checkDataState();
 
             addUpdateLog("装備開発情報を更新しました");
         } catch (Exception e) {
@@ -1529,7 +1530,7 @@ public final class GlobalContext {
                 ApplicationMain.main.updateSortieDock();
             }
 
-            state = checkDataState();
+            //state = checkDataState();
 
             addUpdateLog("保有艦娘情報３を更新しました");
         } catch (Exception e) {
@@ -1882,7 +1883,7 @@ public final class GlobalContext {
 
     /**
      * 保有資材を更新する
-     *
+     * 記録にBasic情報を使うので更新してから呼び出すこと
      * @param apidata
      */
     private static void doMaterialSub(JsonArray apidata) {
@@ -1929,7 +1930,7 @@ public final class GlobalContext {
         if ((materialLogLastUpdate == null)
                 || (TimeUnit.MILLISECONDS.toSeconds(time.getTime() - materialLogLastUpdate.getTime()) >
                 AppConfig.get().getMaterialLogInterval())) {
-            CreateReportLogic.storeMaterialReport(material);
+            CreateReportLogic.storeMaterialReport(material, basic);
 
             materialLogLastUpdate = time;
         }
@@ -2525,7 +2526,7 @@ public final class GlobalContext {
             }
             material.setEvent(ev);
             if (AppConfig.get().isMaterialLogDetail()) {
-                CreateReportLogic.storeMaterialReport(material);
+                CreateReportLogic.storeMaterialReport(material, basic);
             }
         }
     }
