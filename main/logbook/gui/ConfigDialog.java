@@ -194,6 +194,18 @@ public final class ConfigDialog extends Dialog {
         useProxyButton.setText("接続にプロキシを使用する");
         useProxyButton.setSelection(AppConfig.get().isUseProxy());
 
+        Label proxyTypeLabel = new Label(compositeConnection, SWT.NONE);
+        proxyTypeLabel.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false, 1, 1));
+        proxyTypeLabel.setText("代理类型:");
+
+        final Combo proxyTypeCombo = new Combo(compositeConnection, SWT.DROP_DOWN | SWT.READ_ONLY);
+        GridData gdProxyTypeCombo = new GridData(SWT.LEFT, SWT.CENTER, false, false, 3, 1);
+        gdProxyTypeCombo.widthHint = 30;
+        proxyTypeCombo.setLayoutData(gdProxyTypeCombo);
+        proxyTypeCombo.setItems(new String[] { "http", "https", "ftp", "socks" });
+        proxyTypeCombo.setText(AppConfig.get().getProxyType());
+        proxyTypeCombo.setEnabled(AppConfig.get().isUseProxy());
+
         Label proxyHostLabel = new Label(compositeConnection, SWT.NONE);
         proxyHostLabel.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false, 1, 1));
         proxyHostLabel.setText("サーバ:");
@@ -203,6 +215,7 @@ public final class ConfigDialog extends Dialog {
         gdProxyHostText.widthHint = 100;
         proxyHostText.setLayoutData(gdProxyHostText);
         proxyHostText.setText(AppConfig.get().getProxyHost());
+        proxyHostText.setEnabled(AppConfig.get().isUseProxy());
 
         Label proxyPortLabel = new Label(compositeConnection, SWT.NONE);
         proxyPortLabel.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false, 1, 1));
@@ -215,6 +228,64 @@ public final class ConfigDialog extends Dialog {
         GridData gdProxyPortSpinner = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
         gdProxyPortSpinner.widthHint = 55;
         proxyPortSpinner.setLayoutData(gdProxyPortSpinner);
+        proxyPortSpinner.setEnabled(AppConfig.get().isUseProxy());
+
+        final Button useProxyAuthenticationButton = new Button(compositeConnection, SWT.CHECK);
+        useProxyAuthenticationButton.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false, 4, 1));
+        useProxyAuthenticationButton.setText("代理服务器验证");
+        useProxyAuthenticationButton.setSelection(AppConfig.get().isUseProxyAuthentication());
+        useProxyAuthenticationButton.setEnabled(AppConfig.get().isUseProxy());
+
+        Label proxyUserNameLabel = new Label(compositeConnection, SWT.NONE);
+        proxyUserNameLabel.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false, 1, 1));
+        proxyUserNameLabel.setText("用户名:");
+
+        final Text proxyUserNameText = new Text(compositeConnection, SWT.BORDER);
+        GridData gdProxyUserNameText = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
+        gdProxyUserNameText.widthHint = 100;
+        proxyUserNameText.setLayoutData(gdProxyUserNameText);
+        proxyUserNameText.setText(AppConfig.get().getProxyUserName());
+        proxyUserNameText.setEnabled(AppConfig.get().isUseProxy() && AppConfig.get().isUseProxyAuthentication());
+
+        Label proxyPasswordLabel = new Label(compositeConnection, SWT.NONE);
+        proxyPasswordLabel.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false, 1, 1));
+        proxyPasswordLabel.setText("密码:");
+
+        final Text proxyPasswordText = new Text(compositeConnection, SWT.BORDER);
+        GridData gdProxyPasswordText = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
+        gdProxyPasswordText.widthHint = 100;
+        proxyPasswordText.setEchoChar('*');
+        proxyPasswordText.setLayoutData(gdProxyPasswordText);
+        proxyPasswordText.setText(AppConfig.get().getProxyPassword());
+        proxyPasswordText.setEnabled(AppConfig.get().isUseProxy() && AppConfig.get().isUseProxyAuthentication());
+
+        useProxyAuthenticationButton.addSelectionListener(new SelectionAdapter() {
+
+            @Override
+            public void widgetSelected(SelectionEvent event) {
+                // TODO 自動生成されたメソッド・スタブ
+                boolean selection = ((Button) event.widget).getSelection();
+                proxyUserNameText.setEnabled(selection);
+                proxyPasswordText.setEnabled(selection);
+            }
+        });
+
+        useProxyButton.addSelectionListener(new SelectionAdapter() {
+
+            @Override
+            public void widgetSelected(SelectionEvent event) {
+                // TODO 自動生成されたメソッド・スタブ
+                boolean selection = ((Button) event.widget).getSelection();
+                proxyTypeCombo.setEnabled(selection);
+                proxyHostText.setEnabled(selection);
+                proxyPortSpinner.setEnabled(selection);
+                useProxyAuthenticationButton.setEnabled(selection);
+                if (useProxyAuthenticationButton.getSelection()) {
+                    proxyUserNameText.setEnabled(selection);
+                    proxyPasswordText.setEnabled(selection);
+                }
+            }
+        });
 
         final Button sendDatabaseButton = new Button(compositeConnection, SWT.CHECK);
         sendDatabaseButton.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false, 4, 1));
@@ -401,6 +472,11 @@ public final class ConfigDialog extends Dialog {
         visibleOnReturnBathwater.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false, 2, 1));
         visibleOnReturnBathwater.setText("お風呂から上がる時に母港タブを表示");
         visibleOnReturnBathwater.setSelection(AppConfig.get().isVisibleOnReturnBathwater());
+
+        final Button visibleOnFinishCreateShip = new Button(compositeFleetTab, SWT.CHECK);
+        visibleOnFinishCreateShip.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false, 2, 1));
+        visibleOnFinishCreateShip.setText("建造完了時に母港タブを表示");
+        visibleOnFinishCreateShip.setSelection(AppConfig.get().isVisibleOnFinishCreateShip());
 
         Label sakutekiLabel = new Label(compositeFleetTab, SWT.NONE);
         sakutekiLabel.setText("索敵計算式");
@@ -859,6 +935,7 @@ public final class ConfigDialog extends Dialog {
         String pushName[] = new String[] {
                 "遠征帰投を通知",
                 "入渠完了を通知",
+                "建造完了を通知",
                 "泊地修理完了を通知",
                 "疲労回復を通知"
         };
@@ -867,24 +944,29 @@ public final class ConfigDialog extends Dialog {
         final Combo pushPriorityMissionCombo = new Combo(compositePushNotify, SWT.READ_ONLY);
         final Button pushNotifyNdock = new Button(compositePushNotify, SWT.CHECK);
         final Combo pushPriorityNdockCombo = new Combo(compositePushNotify, SWT.READ_ONLY);
+        final Button pushNotifyKdock = new Button(compositePushNotify, SWT.CHECK);
+        final Combo pushPriorityKdockCombo = new Combo(compositePushNotify, SWT.READ_ONLY);
         final Button pushNotifyAkashi = new Button(compositePushNotify, SWT.CHECK);
         final Combo pushPriorityAkashiCombo = new Combo(compositePushNotify, SWT.READ_ONLY);
         final Button pushNotifyCond = new Button(compositePushNotify, SWT.CHECK);
         final Combo pushPriorityCondCombo = new Combo(compositePushNotify, SWT.READ_ONLY);
 
         Button[] pushNotifyButtons = new Button[] {
-                pushNotifyMission, pushNotifyNdock, pushNotifyAkashi, pushNotifyCond };
+                pushNotifyMission, pushNotifyNdock, pushNotifyKdock, pushNotifyAkashi, pushNotifyCond };
         Combo[] pushNotifyCombos = new Combo[] {
-                pushPriorityMissionCombo, pushPriorityNdockCombo, pushPriorityAkashiCombo, pushPriorityCondCombo };
+                pushPriorityMissionCombo, pushPriorityNdockCombo, pushPriorityKdockCombo, pushPriorityAkashiCombo,
+                pushPriorityCondCombo };
         boolean[] pushEnabled = new boolean[] {
                 AppConfig.get().getPushMission(),
                 AppConfig.get().getPushNdock(),
+                AppConfig.get().getPushKdock(),
                 AppConfig.get().isPushAkashi(),
                 AppConfig.get().isPushCond()
         };
         int[] pushPriorities = new int[] {
                 AppConfig.get().getPushPriorityMission(),
                 AppConfig.get().getPushPriorityNdock(),
+                AppConfig.get().getPushPriorityKdock(),
                 AppConfig.get().getPushPriorityAkashi(),
                 AppConfig.get().getPushPriorityCond()
         };
@@ -908,7 +990,7 @@ public final class ConfigDialog extends Dialog {
         }
 
         Button TestNotifyMissionBtn = new Button(compositePushNotify, SWT.NONE);
-        TestNotifyMissionBtn.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false, 2, 1));
+        TestNotifyMissionBtn.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false, 1, 1));
         TestNotifyMissionBtn.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
@@ -922,8 +1004,10 @@ public final class ConfigDialog extends Dialog {
                 AppConfig.get().setImKayacPrivateKey(imkayacPrivateKey.getText());
                 AppConfig.get().setPushMission(pushNotifyMission.getSelection());
                 AppConfig.get().setPushNdock(pushNotifyNdock.getSelection());
+                AppConfig.get().setPushKdock(pushNotifyKdock.getSelection());
                 AppConfig.get().setPushPriorityMission(pushPriorityMissionCombo.getSelectionIndex() - 2);
                 AppConfig.get().setPushPriorityNdock(pushPriorityNdockCombo.getSelectionIndex() - 2);
+                AppConfig.get().setPushPriorityKdock(pushPriorityKdockCombo.getSelectionIndex() - 2);
                 if (AppConfig.get().getPushMission()) {
                     PushNotify.add("通知テスト艦隊(テスト遠征)がまもなく帰投します", "遠征", AppConfig.get().getPushPriorityMission());
                 }
@@ -946,14 +1030,42 @@ public final class ConfigDialog extends Dialog {
                 AppConfig.get().setImKayacPrivateKey(imkayacPrivateKey.getText());
                 AppConfig.get().setPushMission(pushNotifyMission.getSelection());
                 AppConfig.get().setPushNdock(pushNotifyNdock.getSelection());
+                AppConfig.get().setPushKdock(pushNotifyKdock.getSelection());
                 AppConfig.get().setPushPriorityMission(pushPriorityMissionCombo.getSelectionIndex() - 2);
                 AppConfig.get().setPushPriorityNdock(pushPriorityNdockCombo.getSelectionIndex() - 2);
+                AppConfig.get().setPushPriorityKdock(pushPriorityKdockCombo.getSelectionIndex() - 2);
                 if (AppConfig.get().getPushNdock()) {
                     PushNotify.add("通知テスト改(Lv99)がまもなくお風呂からあがります", "入渠", AppConfig.get().getPushPriorityNdock());
                 }
             }
         });
         TestNotifyNdockBtn.setText("テスト通知(入渠)");
+
+        Button TestNotifyKdockBtn = new Button(compositePushNotify, SWT.NONE);
+        TestNotifyKdockBtn.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1));
+        TestNotifyKdockBtn.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                AppConfig.get().setNotifyProwl(prowl.getSelection());
+                AppConfig.get().setProwlAPIKey(prowlAPIKey.getText());
+                AppConfig.get().setNotifyNMA(nma.getSelection());
+                AppConfig.get().setNMAAPIKey(nmaAPIKey.getText());
+                AppConfig.get().setNotifyImKayac(imkayac.getSelection());
+                AppConfig.get().setImKayacUserName(imkayacUserName.getText());
+                AppConfig.get().setImKayacPasswd(imkayacPasswd.getText());
+                AppConfig.get().setImKayacPrivateKey(imkayacPrivateKey.getText());
+                AppConfig.get().setPushMission(pushNotifyMission.getSelection());
+                AppConfig.get().setPushNdock(pushNotifyNdock.getSelection());
+                AppConfig.get().setPushKdock(pushNotifyKdock.getSelection());
+                AppConfig.get().setPushPriorityMission(pushPriorityMissionCombo.getSelectionIndex() - 2);
+                AppConfig.get().setPushPriorityNdock(pushPriorityNdockCombo.getSelectionIndex() - 2);
+                AppConfig.get().setPushPriorityKdock(pushPriorityKdockCombo.getSelectionIndex() - 2);
+                if (AppConfig.get().getPushKdock()) {
+                    PushNotify.add("通知テスト建造完了します", "建造", AppConfig.get().getPushPriorityKdock());
+                }
+            }
+        });
+        TestNotifyKdockBtn.setText("テスト通知(建造)");
 
         // Development タブ
         compositeDevelopment.setLayout(new GridLayout(2, false));
@@ -1066,6 +1178,7 @@ public final class ConfigDialog extends Dialog {
                 AppConfig.get().setBalloonBybadlyDamage(balloonBybadlyDamage.getSelection());
                 AppConfig.get().setVisibleOnReturnMission(visibleOnReturnMission.getSelection());
                 AppConfig.get().setVisibleOnReturnBathwater(visibleOnReturnBathwater.getSelection());
+                AppConfig.get().setVisibleOnFinishCreateShip(visibleOnFinishCreateShip.getSelection());
                 AppConfig.get().setMonoIcon(useMonoIcon.getSelection());
                 AppConfig.get().setShowCondTimer(showCondTimer.getSelection());
                 AppConfig.get().setShowAkashiTimer(showAkashiTimer.getSelection());
@@ -1118,6 +1231,10 @@ public final class ConfigDialog extends Dialog {
                 AppConfig.get().setUseProxy(useProxyButton.getSelection());
                 AppConfig.get().setProxyHost(proxyHostText.getText());
                 AppConfig.get().setProxyPort(proxyPortSpinner.getSelection());
+                AppConfig.get().setProxyType(proxyTypeCombo.getText());
+                AppConfig.get().setUseProxyAuthentication(useProxyAuthenticationButton.getSelection());
+                AppConfig.get().setProxyUserName(proxyUserNameText.getText());
+                AppConfig.get().setProxyPassword(proxyPasswordText.getText());
                 AppConfig.get().setSendDatabase(sendDatabaseButton.getSelection());
                 AppConfig.get().setDatabaseSendLog(databaseLogButton.getSelection());
                 AppConfig.get().setAccessKey(accessKeyText.getText());
@@ -1132,10 +1249,12 @@ public final class ConfigDialog extends Dialog {
                 AppConfig.get().setImKayacPrivateKey(imkayacPrivateKey.getText());
                 AppConfig.get().setPushMission(pushNotifyMission.getSelection());
                 AppConfig.get().setPushNdock(pushNotifyNdock.getSelection());
+                AppConfig.get().setPushKdock(pushNotifyKdock.getSelection());
                 AppConfig.get().setPushAkashi(pushNotifyAkashi.getSelection());
                 AppConfig.get().setPushCond(pushNotifyCond.getSelection());
                 AppConfig.get().setPushPriorityMission(pushPriorityMissionCombo.getSelectionIndex() - 2);
                 AppConfig.get().setPushPriorityNdock(pushPriorityNdockCombo.getSelectionIndex() - 2);
+                AppConfig.get().setPushPriorityKdock(pushPriorityKdockCombo.getSelectionIndex() - 2);
                 AppConfig.get().setPushPriorityAkashi(pushPriorityAkashiCombo.getSelectionIndex() - 2);
                 AppConfig.get().setPushPriorityCond(pushPriorityCondCombo.getSelectionIndex() - 2);
 

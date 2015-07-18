@@ -11,10 +11,13 @@ import java.util.Date;
  */
 public class KdockDto {
 
-    public static final KdockDto EMPTY = new KdockDto(false, null);
+    public static final KdockDto EMPTY = new KdockDto(false, 0, null);
 
     /** 今使用中？ */
     private final boolean nowUsing;
+
+    /** ship id */
+    private final int shipId;
 
     /** 完成する時間 */
     private final Date kdocktime;
@@ -22,8 +25,9 @@ public class KdockDto {
     /**
      * コンストラクター
      */
-    public KdockDto(boolean nowUsing, Date kdocktime) {
+    public KdockDto(boolean nowUsing, int shipId, Date kdocktime) {
         this.nowUsing = nowUsing;
+        this.shipId = shipId;
         this.kdocktime = kdocktime;
     }
 
@@ -33,6 +37,10 @@ public class KdockDto {
      */
     public boolean getNowUsing() {
         return this.nowUsing;
+    }
+
+    public int getShipId() {
+        return this.shipId;
     }
 
     /**

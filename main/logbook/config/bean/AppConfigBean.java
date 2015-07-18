@@ -28,6 +28,18 @@ public final class AppConfigBean {
     /** プロキシポート */
     private int proxyPort = 8080;
 
+    /** 代理服务器类型 */
+    private String proxyType = "http";
+
+    /** 代理服务器认证 */
+    private boolean useProxyAuthentication = false;
+
+    /** 代理服务器用户名 */
+    private String proxyUserName = "";
+
+    /** 代理服务器密码 */
+    private String proxyPassword = "";
+
     /** 最前面に表示 */
     private boolean onTop = true;
 
@@ -94,6 +106,9 @@ public final class AppConfigBean {
     /** 入渠Push通知のPriority */
     private int PushPriorityNdock = 0;
 
+    /** 建造Push通知のPriority */
+    private int PushPriorityKdock = 0;
+
     /** 泊地修理Push通知のPriority */
     private int PushPriorityAkashi = 0;
 
@@ -105,6 +120,9 @@ public final class AppConfigBean {
 
     /**　入渠完了時にPush通知する */
     private boolean PushNdock = true;
+
+    /**　建造完了時にPush通知する */
+    private boolean PushKdock = true;
 
     /** 泊地修理完了時にPush通知する */
     private boolean PushAkashi = true;
@@ -157,6 +175,9 @@ public final class AppConfigBean {
     /** 入渠-1分前に通知する */
     private boolean noticeNdock = true;
 
+    /** 建造完了時に通知する */
+    private boolean noticeKdock = true;
+
     /** 泊地修理完了時に通知する */
     private boolean noticeAkashi = true;
 
@@ -192,6 +213,9 @@ public final class AppConfigBean {
 
     /** お風呂から上がる時に母港タブを表示 */
     private boolean visibleOnReturnBathwater = true;
+
+    /** 建造完了時に母港タブを表示 */
+    private boolean visibleOnFinishCreateShip = true;
 
     /** 色合い */
     private boolean colorSupport = false;
@@ -408,6 +432,38 @@ public final class AppConfigBean {
      */
     public void setProxyPort(int proxyPort) {
         this.proxyPort = proxyPort;
+    }
+
+    public String getProxyType() {
+        return this.proxyType;
+    }
+
+    public void setProxyType(String proxyType) {
+        this.proxyType = proxyType;
+    }
+
+    public boolean isUseProxyAuthentication() {
+        return this.useProxyAuthentication;
+    }
+
+    public void setUseProxyAuthentication(boolean useProxyAuthentication) {
+        this.useProxyAuthentication = useProxyAuthentication;
+    }
+
+    public String getProxyUserName() {
+        return this.proxyUserName;
+    }
+
+    public void setProxyUserName(String proxyUserName) {
+        this.proxyUserName = proxyUserName;
+    }
+
+    public String getProxyPassword() {
+        return this.proxyPassword;
+    }
+
+    public void setProxyPassword(String proxyPassword) {
+        this.proxyPassword = proxyPassword;
     }
 
     /**
@@ -684,6 +740,10 @@ public final class AppConfigBean {
         return this.PushNdock;
     }
 
+    public boolean getPushKdock() {
+        return this.PushKdock;
+    }
+
     /** 遠征帰投時にPush通知する を設定します
      * @param PushMission
      */
@@ -696,6 +756,10 @@ public final class AppConfigBean {
      */
     public void setPushNdock(boolean pushndock) {
         this.PushNdock = pushndock;
+    }
+
+    public void setPushKdock(boolean pushKdock) {
+        this.PushKdock = pushKdock;
     }
 
     /**
@@ -740,6 +804,10 @@ public final class AppConfigBean {
         return this.PushPriorityNdock;
     }
 
+    public int getPushPriorityKdock() {
+        return this.PushPriorityKdock;
+    }
+
     /** 遠征Push通知のPriorityを設定します
      * @param priority
      */
@@ -752,6 +820,10 @@ public final class AppConfigBean {
      */
     public void setPushPriorityNdock(int priority) {
         this.PushPriorityNdock = priority;
+    }
+
+    public void setPushPriorityKdock(int pushPriorityKdock) {
+        this.PushPriorityKdock = pushPriorityKdock;
     }
 
     /**
@@ -1002,6 +1074,14 @@ public final class AppConfigBean {
         this.noticeNdock = noticeNdock;
     }
 
+    public boolean isNoticeKdock() {
+        return this.noticeKdock;
+    }
+
+    public void setNoticeKdock(boolean noticeKdock) {
+        this.noticeKdock = noticeKdock;
+    }
+
     /**
      * @return noticeAkashi
      */
@@ -1204,6 +1284,14 @@ public final class AppConfigBean {
      */
     public void setVisibleOnReturnBathwater(boolean visibleOnReturnBathwater) {
         this.visibleOnReturnBathwater = visibleOnReturnBathwater;
+    }
+
+    public boolean isVisibleOnFinishCreateShip() {
+        return this.visibleOnFinishCreateShip;
+    }
+
+    public void setVisibleOnFinishCreateShip(boolean visibleOnFinishCreateShip) {
+        this.visibleOnFinishCreateShip = visibleOnFinishCreateShip;
     }
 
     /**

@@ -278,6 +278,8 @@ public final class ApplicationMain extends WindowBase {
     private Button deckNotice;
     /** 入渠通知 */
     private Button ndockNotice;
+    /** 建造通知 */
+    private Button kdockNotice;
     /** 泊地修理通知 */
     private Button akashiNotice;
     /** 疲労通知 */
@@ -319,6 +321,24 @@ public final class ApplicationMain extends WindowBase {
     private Label ndock4name;
     /** 入渠.ドッグ4.お風呂から上がる時間 **/
     private Text ndock4time;
+    /** 建造グループ **/
+    private Group kdockGroup;
+    /** 建造.ドッグ1.艦娘の名前 **/
+    private Label kdock1name;
+    /** 建造.ドッグ1.建造完了時間 **/
+    private Text kdock1time;
+    /** 建造.ドッグ2.艦娘の名前 **/
+    private Label kdock2name;
+    /** 建造.ドッグ2.建造完了時間 **/
+    private Text kdock2time;
+    /** 建造.ドッグ3.艦娘の名前 **/
+    private Label kdock3name;
+    /** 建造.ドッグ3.建造完了時間 **/
+    private Text kdock3time;
+    /** 建造.ドッグ4.艦娘の名前 **/
+    private Label kdock4name;
+    /** 建造.ドッグ4.建造完了時間 **/
+    private Text kdock4time;
 
     /** その他グループ**/
     private Composite otherGroup;
@@ -814,6 +834,16 @@ public final class ApplicationMain extends WindowBase {
             }
         });
 
+        this.kdockNotice = new Button(this.notifySettingGroup, SWT.CHECK);
+        this.kdockNotice.setSelection(AppConfig.get().isNoticeKdock());
+        this.kdockNotice.setText("建造");
+        this.kdockNotice.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                AppConfig.get().setNoticeKdock(ApplicationMain.this.kdockNotice.getSelection());
+            }
+        });
+
         this.akashiNotice = new Button(this.notifySettingGroup, SWT.CHECK);
         this.akashiNotice.setSelection(AppConfig.get().isNoticeAkashi());
         this.akashiNotice.setText("泊地修理");
@@ -925,6 +955,52 @@ public final class ApplicationMain extends WindowBase {
         GridData gdndock4time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
         gdndock4time.widthHint = 75;
         this.ndock4time.setLayoutData(gdndock4time);
+
+        // 建造
+        this.kdockGroup = new Group(this.mainComposite, SWT.NONE);
+        this.kdockGroup.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+        this.kdockGroup.setText("建造");
+        this.kdockGroup.setLayout(SwtUtils.makeGridLayout(2, 1, 1, 0, 0));
+
+        this.kdock1name = new Label(this.kdockGroup, SWT.NONE);
+        this.kdock1name.setText("ドッグ1に浸かっている艦娘の名前");
+        this.kdock1name.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        this.kdock1time = new Text(this.kdockGroup, SWT.SINGLE | SWT.BORDER);
+        this.kdock1time.setText("お風呂から上がる時間");
+        GridData gdkdock1time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
+        gdkdock1time.widthHint = 75;
+        this.kdock1time.setLayoutData(gdkdock1time);
+
+        this.kdock2name = new Label(this.kdockGroup, SWT.NONE);
+        this.kdock2name.setText("ドッグ2に浸かっている艦娘の名前");
+        this.kdock2name.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        this.kdock2time = new Text(this.kdockGroup, SWT.SINGLE | SWT.BORDER);
+        this.kdock2time.setText("お風呂から上がる時間");
+        GridData gdkdock2time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
+        gdkdock2time.widthHint = 75;
+        this.kdock2time.setLayoutData(gdkdock2time);
+
+        this.kdock3name = new Label(this.kdockGroup, SWT.NONE);
+        this.kdock3name.setText("ドッグ3に浸かっている艦娘の名前");
+        this.kdock3name.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        this.kdock3time = new Text(this.kdockGroup, SWT.SINGLE | SWT.BORDER);
+        this.kdock3time.setText("お風呂から上がる時間");
+        GridData gdkdock3time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
+        gdkdock3time.widthHint = 75;
+        this.kdock3time.setLayoutData(gdkdock3time);
+
+        this.kdock4name = new Label(this.kdockGroup, SWT.NONE);
+        this.kdock4name.setText("ドッグ4に浸かっている艦娘の名前");
+        this.kdock4name.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        this.kdock4time = new Text(this.kdockGroup, SWT.SINGLE | SWT.BORDER);
+        this.kdock4time.setText("お風呂から上がる時間");
+        GridData gdkdock4time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
+        gdkdock4time.widthHint = 75;
+        this.kdock4time.setLayoutData(gdkdock4time);
 
         // -------
 
@@ -1071,9 +1147,10 @@ public final class ApplicationMain extends WindowBase {
 
         // 選択する項目はドラックで移動できないようにする
         for (Control c : new Control[] { this.commandComposite,
-                this.deckNotice, this.ndockNotice,
+                this.deckNotice, this.ndockNotice, this.kdockNotice,
                 this.deck1time, this.deck2time, this.deck3time, this.deck4time,
                 this.ndock1time, this.ndock2time, this.ndock3time, this.ndock4time,
+                this.kdock1time, this.kdock2time, this.kdock3time, this.kdock4time,
                 this.condTimerTime,
                 this.console }) {
             c.setData("disable-drag-move", true);
@@ -1626,6 +1703,13 @@ public final class ApplicationMain extends WindowBase {
     }
 
     /**
+     * @return 1分前に通知する(入渠)
+     */
+    public Button getKdockNotice() {
+        return this.kdockNotice;
+    }
+
+    /**
      * @return akashiNotice
      */
     public Button getAkashiNotice() {
@@ -1763,6 +1847,42 @@ public final class ApplicationMain extends WindowBase {
      */
     public Text getNdock4time() {
         return this.ndock4time;
+    }
+
+    public Group getKdockGroup() {
+        return this.kdockGroup;
+    }
+
+    public Label getKdock1name() {
+        return this.kdock1name;
+    }
+
+    public Text getKdock1time() {
+        return this.kdock1time;
+    }
+
+    public Label getKdock2name() {
+        return this.kdock2name;
+    }
+
+    public Text getKdock2time() {
+        return this.kdock2time;
+    }
+
+    public Label getKdock3name() {
+        return this.kdock3name;
+    }
+
+    public Text getKdock3time() {
+        return this.kdock3time;
+    }
+
+    public Label getKdock4name() {
+        return this.kdock4name;
+    }
+
+    public Text getKdock4time() {
+        return this.kdock4time;
     }
 
     public Label getCondTimerLabel() {

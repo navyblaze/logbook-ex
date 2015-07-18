@@ -19,8 +19,10 @@ import logbook.dto.BasicInfoDto;
 import logbook.dto.DeckMissionDto;
 import logbook.dto.DockDto;
 import logbook.dto.ItemInfoDto;
+import logbook.dto.KdockDto;
 import logbook.dto.NdockDto;
 import logbook.dto.ShipDto;
+import logbook.dto.ShipInfoDto;
 import logbook.gui.ApplicationMain;
 import logbook.gui.FleetWindow;
 import logbook.gui.logic.ColorManager;
@@ -34,6 +36,7 @@ import logbook.internal.CondTiming;
 import logbook.internal.EnemyData;
 import logbook.internal.LoggerHolder;
 import logbook.internal.MasterData;
+import logbook.internal.Ship;
 import logbook.internal.ShipParameterRecord;
 import logbook.scripting.ScriptData;
 import logbook.util.SwtUtils;
@@ -216,7 +219,7 @@ public final class AsyncExecApplicationMain extends Thread {
     }
 
     /**
-     * 遠征と入渠を更新する
+     * 遠征と入渠と建造を更新する
      */
     private static final class UpdateDeckNdockTask implements Runnable {
 
@@ -224,6 +227,7 @@ public final class AsyncExecApplicationMain extends Thread {
 
         private static final boolean[] FLAG_NOTICE_DECK = { false, false, false };
         private static final boolean[] FLAG_NOTICE_NDOCK = { false, false, false, false };
+        private static final boolean[] FLAG_NOTICE_KDOCK = { false, false, false, false };
         private static final boolean[] FLAG_NOTICE_COND = { false, false, false, false };
 
         private final ApplicationMain main;
@@ -233,6 +237,7 @@ public final class AsyncExecApplicationMain extends Thread {
 
         private final List<String> noticeMission = new ArrayList<String>();
         private final List<String> noticeNdock = new ArrayList<String>();
+        private final List<String> noticeKdock = new ArrayList<String>();
         private final List<String> noticeCond = new ArrayList<String>();
         private final List<String> noticeAkashi = new ArrayList<String>();
         private final Date now = new Date();
@@ -262,6 +267,8 @@ public final class AsyncExecApplicationMain extends Thread {
             this.updateDeck();
             // 入渠を更新する
             this.updateNdock();
+            // 建造を更新する
+            this.updateKdock();
             // その他の時間を更新
             this.updateOtherTimer();
 
@@ -286,6 +293,18 @@ public final class AsyncExecApplicationMain extends Thread {
                 if (AppConfig.get().getPushNdock()) {
                     PushNotify.add(StringUtils.join(this.noticeNdock, "\r\n"), "入渠",
                             AppConfig.get().getPushPriorityNdock());
+                }
+            }
+
+            // 建造通知
+            if (this.noticeKdock.size() > 0) {
+                Sound.randomDockSoundPlay();
+                visibleHome |= AppConfig.get().isVisibleOnFinishCreateShip();
+
+                // Push通知 建造
+                if (AppConfig.get().getPushKdock()) {
+                    PushNotify.add(StringUtils.join(this.noticeKdock, "\r\n"), "建造",
+                            AppConfig.get().getPushPriorityKdock());
                 }
             }
 
@@ -323,6 +342,7 @@ public final class AsyncExecApplicationMain extends Thread {
                     List<String> notice = new ArrayList<String>();
                     this.addNotice(notice, title, this.noticeMission, "遠征");
                     this.addNotice(notice, title, this.noticeNdock, "入渠");
+                    this.addNotice(notice, title, this.noticeKdock, "建造");
                     this.addNotice(notice, title, this.noticeCond, "疲労回復");
                     this.addNotice(notice, title, this.noticeAkashi, "泊地修理");
                     if (notice.size() > 0) {
@@ -617,6 +637,73 @@ public final class AsyncExecApplicationMain extends Thread {
                 }
                 ndockNameLabels[i].setText(name);
                 ndockTimeTexts[i].setText(time);
+            }
+        }
+
+        private void updateKdockNotice(String name, int index, long rest) {
+            if (this.main.getKdockNotice().getSelection()) {
+
+                if ((rest <= 0) && !FLAG_NOTICE_KDOCK[index]) {
+                    this.noticeKdock.add(name + " がまもなく建造完了します");
+                    FLAG_NOTICE_KDOCK[index] = true;
+                } else if (rest > 0) {
+                    FLAG_NOTICE_KDOCK[index] = false;
+                }
+            } else {
+                FLAG_NOTICE_KDOCK[index] = false;
+            }
+        }
+
+        /**
+         * 建造を更新する
+         * 
+         * @param now
+         * @param notice
+         * @return
+         */
+        private void updateKdock() {
+            Label[] kdockNameLabels = { this.main.getKdock1name(), this.main.getKdock2name(),
+                    this.main.getKdock3name(), this.main.getKdock4name() };
+            Text[] kdockTimeTexts = { this.main.getKdock1time(), this.main.getKdock2time(), this.main.getKdock3time(),
+                    this.main.getKdock4time() };
+
+            KdockDto[] kdocks = GlobalContext.getKdocks();
+
+            for (int i = 0; i < kdocks.length; i++) {
+                String name = "";
+                String time = "";
+
+                if (kdocks[i].getNowUsing()) {
+                    ShipInfoDto ship = Ship.get(String.valueOf(kdocks[i].getShipId()));
+                    if (ship.equals(ShipInfoDto.EMPTY)) {
+                        name = "未知";
+                    } else {
+                        name = ship.getName();
+                    }
+                    if (kdocks[i].getKdocktime() != null) {
+                        long rest = TimeLogic.getRest(this.now, kdocks[i].getKdocktime());
+
+                        // ツールチップテキストで時刻を表示する
+                        kdockTimeTexts[i].setToolTipText(this.format.format(kdocks[i].getKdocktime()));
+
+                        // 20分前、10分前、5分前になったら背景色を変更する
+                        kdockTimeTexts[i].setBackground(getBackgroundColor(rest));
+
+                        // 通知生成
+                        this.updateKdockNotice(name, i, rest);
+                        time = TimeLogic.toDateRestString(rest);
+                        if (time == null) {
+                            time = "まもなく建造完了します";
+                        }
+                    } else {
+                        time = "まもなく建造完了します";
+                    }
+                } else {
+                    kdockTimeTexts[i].setBackground(SWTResourceManager.getColor(SWT.COLOR_WHITE));
+                    kdockTimeTexts[i].setToolTipText(null);
+                }
+                kdockNameLabels[i].setText(name);
+                kdockTimeTexts[i].setText(time);
             }
         }
 

@@ -187,6 +187,15 @@ public final class TrayItemMenuListener implements MenuDetectListener {
                 new ConfigDialog(ApplicationMain.main).open();
             }
         });
+        // 設定
+        MenuItem hide = new MenuItem(this.menu, SWT.NONE);
+        hide.setText("隐藏(&I)");
+        hide.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                ApplicationMain.main.setVisible(false);
+            }
+        });
         // 終了
         final MenuItem dispose = new MenuItem(this.menu, SWT.NONE);
         dispose.setText("終了");

@@ -1385,16 +1385,17 @@ public final class GlobalContext {
         for (int i = 0; i < apidata.size(); i++) {
             JsonObject object = (JsonObject) apidata.get(i);
             int state = object.getJsonNumber("api_state").intValue();
+            int shipId = object.getInt("api_created_ship_id");
             long milis = object.getJsonNumber("api_complete_time").longValue();
 
             Date time = null;
             if (milis > 0) {
                 time = new Date(milis);
-                kdocks[i] = new KdockDto(true, time);
+                kdocks[i] = new KdockDto(true, shipId, time);
             }
             else {
                 // 完了してる or 空いてる
-                kdocks[i] = new KdockDto(state == 3, null);
+                kdocks[i] = new KdockDto(state == 3, shipId, null);
             }
         }
     }

@@ -34,6 +34,8 @@ import org.eclipse.swt.widgets.Display;
  */
 public final class ReverseProxyServlet extends ProxyServlet {
 
+    private static final long serialVersionUID = 7719905346269071718L;
+
     /** ライブラリバグ対応 (HttpRequest#queryを上書きする) */
     private static final Field QUERY_FIELD = getDeclaredField(HttpRequest.class, "query");
 
@@ -174,6 +176,7 @@ public final class ReverseProxyServlet extends ProxyServlet {
             // 設定する
             client.setProxyConfiguration(new ProxyConfiguration(host, port));
         }
+        client.setConnectTimeout(Long.MAX_VALUE);
         return client;
     }
 
