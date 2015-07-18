@@ -57,10 +57,13 @@ public class WindowBase {
     }
 
     private final WindowTreeNode treeNode = new WindowTreeNode(this);
+    private final boolean noMenubar = AppConfig.get().isNoMenubar();
+    private final boolean disableWindowMenu = AppConfig.get().isDisableWindowMenu();
     // アプリ上の仮想的な親子関係
     private WindowBase parent;
     private Shell shell;
-    private Menu alphamenu;
+    private Menu menubar;
+    private Menu popupmenu;
     private MenuItem menuItem;
 
     private DragMoveEventHandler dragMoveHandler;
@@ -70,6 +73,9 @@ public class WindowBase {
     // Mainウィンドウの最小化に連動して setVisible するため
     private boolean topMost = false;
     private boolean showTitlebar = true;
+
+    // shell.getVisible() は最小化状態だとfalseを返すので独自の状態を持つ
+    private boolean minimized = false;
 
     // メニュー
     private MenuItem topMostItem;
@@ -354,6 +360,11 @@ public class WindowBase {
         }
     }
 
+    public static boolean isCommonTopMostEnabled() {
+        return (nativeService.isTopMostAvailable() == false) && // Windows
+                !"gtk".equals(SWT.getPlatform()); // gtkでON_TOPするとフレームが表示されない
+    }
+
     /**
      * 親ウィンドウ用のコンストラクタ
      */
@@ -408,7 +419,7 @@ public class WindowBase {
     }
 
     private int getDefaultStyle() {
-        if ((nativeService.isTopMostAvailable() == false) && AppConfig.get().isOnTop()) {
+        if (isCommonTopMostEnabled() && AppConfig.get().isOnTop()) {
             return SWT.ON_TOP;
         }
         return 0;
@@ -456,12 +467,12 @@ public class WindowBase {
      * これを呼び出した時点でウィンドウに載っているすべてのオブジェクトに右クリックメニューを設定する
      */
     protected void registerEvents() {
-        setMenu(this.shell, this.alphamenu);
+        setMenu(this.shell, this.popupmenu);
         this.shell.addListener(SWT.Dispose, new Listener() {
             @Override
             public void handleEvent(Event event) {
                 // setMenuされたメニューしかdisposeされないので
-                WindowBase.this.alphamenu.dispose();
+                WindowBase.this.popupmenu.dispose();
                 // アニメーションをオフ
                 WindowBase.this.treeNode.setEnabled(false);
                 // ツリーから切り離す
@@ -495,6 +506,23 @@ public class WindowBase {
         }
     }
 
+    protected void createMenubar() {
+        if (this.noMenubar) {
+            if (!this.disableWindowMenu) {
+                // ウィンドウメニューがあるときはセパレータだけ追加しておく
+                new MenuItem(this.popupmenu, SWT.SEPARATOR);
+            }
+            return;
+        }
+        if (this.menubar == null) {
+            if (this.shell == null) {
+                throw new IllegalStateException("You need to create shell before creating menu bar.");
+            }
+            this.menubar = new Menu(this.shell, SWT.BAR);
+            this.shell.setMenuBar(this.menubar);
+        }
+    }
+
     private static void setMenu(Control c, Menu ma) {
         if (c.getData("disable-window-menu") == null) {
             if (c instanceof Composite) {
@@ -524,13 +552,18 @@ public class WindowBase {
 
     public void hideWindow() {
         // 閉じる前に位置を記憶
-        WindowBase.this.save();
-        WindowBase.this.menuItem.setSelection(false);
-        WindowBase.this.setVisible(false);
+        this.save();
+        if (this.menuItem != null) {
+            this.menuItem.setSelection(false);
+        }
+        this.setVisible(false);
     }
 
     private void topMostChanged(boolean topMost) {
         this.topMostItem.setSelection(topMost);
+        if (this.disableWindowMenu) {
+            return;
+        }
         if (this.topMost != topMost) {
             this.topMost = topMost;
             nativeService.setTopMost(this.getShell(), topMost);
@@ -564,13 +597,14 @@ public class WindowBase {
      * @param newValue
      */
     protected void showTitlebarChanged(boolean showTitlebar) {
-        //if (this.moveWithDrag()) {
         this.showTitlebarItem.setSelection(showTitlebar);
+        if (this.disableWindowMenu) {
+            return;
+        }
         if (this.showTitlebar != showTitlebar) {
             this.showTitlebar = showTitlebar;
             nativeService.toggleTitlebar(this.getShell(), showTitlebar);
         }
-        //}
     }
 
     private boolean isMouseHovering() {
@@ -616,19 +650,7 @@ public class WindowBase {
         }
     }
 
-    private void createContents(boolean cascade) {
-        this.shell.setData(this);
-        this.shell.setImage(SWTResourceManager.getImage(WindowBase.class, AppConstants.LOGO));
-        // ウィンドウ基本メニュー
-        this.alphamenu = new Menu(this.shell);
-        Menu rootMenu = this.alphamenu;
-        if (cascade) {
-            MenuItem rootItem = new MenuItem(this.alphamenu, SWT.CASCADE);
-            rootMenu = new Menu(this.shell, SWT.DROP_DOWN);
-            rootItem.setMenu(rootMenu);
-            rootItem.setText("ウィンドウ");
-        }
-
+    private void createWindowMenu(Menu rootMenu) {
         if (nativeService.isTopMostAvailable()) {
             // 最前面に表示する
             this.topMostItem = new MenuItem(rootMenu, SWT.CHECK);
@@ -708,6 +730,33 @@ public class WindowBase {
                 }
             });
         }
+    }
+
+    private void createContents(boolean cascade) {
+        this.shell.setData(this);
+        this.shell.setImage(SWTResourceManager.getImage(WindowBase.class, AppConstants.LOGO));
+        // ウィンドウ基本メニュー
+        this.popupmenu = new Menu(this.shell);
+        Menu rootMenu = this.popupmenu;
+
+        if (this.disableWindowMenu) {
+            // ダミーメニューを作る
+            final Menu dummy = rootMenu = new Menu(this.shell, SWT.DROP_DOWN);
+            this.shell.addListener(SWT.Dispose, new Listener() {
+                @Override
+                public void handleEvent(Event event) {
+                    dummy.dispose();
+                }
+            });
+        }
+        else if (cascade) {
+            MenuItem rootItem = new MenuItem(this.popupmenu, SWT.CASCADE);
+            rootMenu = new Menu(this.shell, SWT.DROP_DOWN);
+            rootItem.setMenu(rootMenu);
+            rootItem.setText("ウィンドウ");
+        }
+
+        this.createWindowMenu(rootMenu);
 
         // 初期状態を設定
         if (this.parent != null) {
@@ -744,7 +793,8 @@ public class WindowBase {
             //}
         }
         // 透過設定
-        boolean changeAnimation = (this.shareOpacitySetting != this.config.isShareOpacitySetting());
+        boolean changeAnimation = false;
+        changeAnimation = (this.shareOpacitySetting != this.config.isShareOpacitySetting());
         this.shareOpacitySetting = this.config.isShareOpacitySetting();
         this.shareOpacityItem.setSelection(this.shareOpacitySetting);
         this.opaqueChanged(this.config.isMouseHoveringAware());
@@ -774,14 +824,16 @@ public class WindowBase {
 
     /** parent is un-minimized */
     public void shellDeiconified() {
-        if ((this.menuItem != null) && this.menuItem.getSelection()) {
+        if ((this.menuItem != null) && this.menuItem.getSelection() && this.minimized) {
+            this.minimized = false;
             this.shell.setVisible(true);
         }
     }
 
     /** parent is minimized */
     public void shellIconified() {
-        if ((this.menuItem != null) && this.menuItem.getSelection()) {
+        if ((this.menuItem != null) && this.menuItem.getSelection() && this.shell.getVisible()) {
+            this.minimized = true;
             this.shell.setVisible(false);
         }
     }
@@ -854,6 +906,10 @@ public class WindowBase {
         }
     }
 
+    public boolean getVisible() {
+        return this.minimized || this.shell.getVisible();
+    }
+
     public Shell getActualParent() {
         if (this.shell.getParent() == null)
             return null;
@@ -867,8 +923,15 @@ public class WindowBase {
         return this.shell;
     }
 
-    public Menu getMenu() {
-        return this.alphamenu;
+    public Menu getMenubar() {
+        if (this.noMenubar) {
+            return this.popupmenu;
+        }
+        return this.menubar;
+    }
+
+    public Menu getPopupMenu() {
+        return this.popupmenu;
     }
 
     public MenuItem getMenuItem() {
@@ -1012,5 +1075,12 @@ public class WindowBase {
 
     private void dbgprint(String text) {
         //System.out.println("[" + this.getWindowId() + "] " + text);
+    }
+
+    /**
+     * @return noMenubar
+     */
+    public boolean isNoMenubar() {
+        return this.noMenubar;
     }
 }

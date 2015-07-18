@@ -3,21 +3,22 @@ package logbook.server.proxy;
 import java.io.UnsupportedEncodingException;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import logbook.config.AppConfig;
 import logbook.constants.AppConstants;
 import logbook.data.UndefinedData;
 import logbook.gui.ApplicationMain;
+import logbook.internal.LoggerHolder;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
 import org.eclipse.jetty.client.util.StringContentProvider;
 import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.jetty.util.UrlEncoded;
+import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.swt.widgets.Display;
 
 /**
@@ -25,7 +26,7 @@ import org.eclipse.swt.widgets.Display;
  * @author Nekopanda
  */
 public class DatabaseClient extends Thread {
-    private static final Logger LOG = LogManager.getLogger(DatabaseClient.class);
+    private static final LoggerHolder LOG = new LoggerHolder(DatabaseClient.class);
     private static DatabaseClient instance = null;
 
     private static final String[] sendDatabaseUrls = new String[]
@@ -54,6 +55,14 @@ public class DatabaseClient extends Thread {
             "api_req_combined_battle/battleresult"
     };
 
+    private static class QueueItem {
+        public UndefinedData data;
+
+        public QueueItem(UndefinedData data) {
+            this.data = data;
+        }
+    }
+
     private static synchronized DatabaseClient getInstance() {
         if (instance == null) {
             instance = new DatabaseClient();
@@ -68,7 +77,7 @@ public class DatabaseClient extends Thread {
             {
                 if (data.getUrl().endsWith(entry))
                 {
-                    getInstance().dataQueue.offer(data);
+                    getInstance().dataQueue.offer(new QueueItem(data));
                     break;
                 }
             }
@@ -78,12 +87,12 @@ public class DatabaseClient extends Thread {
     public static synchronized void end() {
         if (instance != null) {
             instance.endRequested = true;
-            instance.interrupt();
+            instance.dataQueue.offer(new QueueItem(null));
             try {
                 instance.join();
                 instance = null;
             } catch (InterruptedException e) {
-                LOG.fatal("DatabaseClientスレッド終了時に何かのエラー", e);
+                LOG.get().fatal("DatabaseClientスレッド終了時に何かのエラー", e);
             }
         }
     }
@@ -92,7 +101,7 @@ public class DatabaseClient extends Thread {
     private final Pattern apiTokenPattern = Pattern
             .compile("&api(_|%5F)token=[0-9a-f]+|api(_|%5F)token=[0-9a-f]+&?");
 
-    private final BlockingQueue<UndefinedData> dataQueue = new ArrayBlockingQueue<UndefinedData>(32);
+    private final BlockingQueue<QueueItem> dataQueue = new ArrayBlockingQueue<>(32);
 
     private HttpClient httpClient = null;
 
@@ -124,10 +133,15 @@ public class DatabaseClient extends Thread {
             int skipCount = 0;
             int errorCount = 0;
             this.httpClient = new HttpClient();
+            this.httpClient.setExecutor(new QueuedThreadPool(2, 1));
+            this.httpClient.setMaxConnectionsPerDestination(2);
             this.httpClient.start();
 
             while (true) {
-                final UndefinedData data = this.dataQueue.take();
+                final UndefinedData data = this.dataQueue.take().data;
+                if (this.endRequested) {
+                    return;
+                }
                 if (skipCount > 0) {
                     --skipCount;
                     continue;
@@ -135,7 +149,12 @@ public class DatabaseClient extends Thread {
                 for (int retly = 0;; ++retly) {
                     String errorReason = null;
                     try {
-                        ContentResponse response = this.createRequest(data).send();
+                        // 20秒でタイムアウト
+                        Request request = this.createRequest(data).timeout(20, TimeUnit.SECONDS);
+                        ContentResponse response = request.send();
+                        if (this.endRequested) {
+                            return;
+                        }
                         if (HttpStatus.isSuccess(response.getStatus())) {
                             // 成功したらエラーカウンタをリセット
                             skipCount = errorCount = 0;
@@ -163,12 +182,15 @@ public class DatabaseClient extends Thread {
                     if (errorReason != null) {
                         // 少し時間をおいてリトライ
                         Thread.sleep(1000);
+                        if (this.endRequested) {
+                            return;
+                        }
                         if (retly >= 4) {
                             // リトライが多すぎたらエラーにする
                             skipCount = (errorCount++) * 4;
-                            LOG.warn("データベースへの送信に失敗しました. " + errorReason);
+                            LOG.get().warn("データベースへの送信に失敗しました. " + errorReason);
                             if (skipCount > 0) {
-                                LOG.warn("以降 " + skipCount + " 個の送信をスキップします.");
+                                LOG.get().warn("以降 " + skipCount + " 個の送信をスキップします.");
                             }
                             break;
                         }
@@ -178,14 +200,14 @@ public class DatabaseClient extends Thread {
 
         } catch (Exception e) {
             if (!this.endRequested) {
-                LOG.fatal("スレッドが異常終了しました", e);
+                LOG.get().fatal("スレッドが異常終了しました", e);
             }
         } finally {
             if (this.httpClient != null) {
                 try {
                     this.httpClient.stop();
                 } catch (Exception e) {
-                    LOG.fatal("HttpClientの終了に失敗", e);
+                    LOG.get().fatal("HttpClientの終了に失敗", e);
                 }
             }
         }

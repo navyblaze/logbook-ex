@@ -14,14 +14,19 @@ import logbook.dto.BattleExDto;
 import logbook.dto.DockDto;
 import logbook.dto.MapCellDto;
 import logbook.dto.ResultRank;
+import logbook.dto.ShipBaseDto;
 import logbook.dto.ShipDto;
+import logbook.dto.ShipInfoDto;
+import logbook.gui.logic.ColorManager;
 import logbook.internal.EnemyData;
+import logbook.internal.Item;
+import logbook.internal.Ship;
 
+import org.apache.commons.lang3.StringUtils;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.MenuItem;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.wb.swt.SWTResourceManager;
 
 /**
  * @author Nekopanda
@@ -107,15 +112,21 @@ public class BattleWindow extends BattleWindowBase {
         }
         else if (enemyData != null) {
             String name = enemyData.getEnemyName();
-            if (name != null) {
+            if (!StringUtils.isEmpty(name)) {
                 this.infoLabels[1][0].setText(name);
             }
             else {
                 this.infoLabels[1][0].setText("KCRDB互換データ");
             }
-            String[] ships = enemyData.getEnemyShips();
+            int[] ships = enemyData.getEnemyShipsId();
             for (int i = 0; i < 6; ++i) {
-                this.enemyLabels[i].setText(String.valueOf(i + 1) + "." + ships[i]);
+                ShipInfoDto shipinfo = Ship.get(String.valueOf(ships[i]));
+                if (shipinfo != null) {
+                    String tooltip = ShipBaseDto.makeDetailedString(
+                            shipinfo.getFullName(), Item.fromIdList(shipinfo.getDefaultSlot()));
+                    this.enemyLabels[i].setText(String.valueOf(i + 1) + "." + shipinfo.getFullName());
+                    this.enemyLabels[i].setToolTipText(tooltip);
+                }
             }
             this.infoLabels[1][1].setText(FORM_PREFIX + enemyData.getFormation());
         }
@@ -321,8 +332,8 @@ public class BattleWindow extends BattleWindowBase {
 
         for (int i = 0; i < 3; ++i) {
             if ((rank == ResultRank.C) || (rank == ResultRank.D) || (rank == ResultRank.E)) {
-                this.resultLabel[i].setBackground(SWTResourceManager.getColor(AppConstants.LOSE_BATTLE_COLOR));
-                this.resultLabel[i].setForeground(SWTResourceManager.getColor(SWT.COLOR_WHITE));
+                this.resultLabel[i].setBackground(ColorManager.getColor(AppConstants.LOSE_BATTLE_COLOR));
+                this.resultLabel[i].setForeground(ColorManager.getColor(SWT.COLOR_WHITE));
             }
             else {
                 this.resultLabel[i].setBackground(null);

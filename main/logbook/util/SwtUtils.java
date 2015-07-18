@@ -10,6 +10,8 @@ import javax.annotation.CheckForNull;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.FontData;
+import org.eclipse.swt.graphics.FontMetrics;
+import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.ImageData;
 import org.eclipse.swt.graphics.Rectangle;
@@ -17,6 +19,7 @@ import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
+import org.eclipse.swt.layout.RowLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
@@ -103,9 +106,19 @@ public final class SwtUtils {
         return gl;
     }
 
+    public static RowLayout makeRowLayout(boolean horizontal, int spacing, int margin, boolean wrap) {
+        RowLayout rl = new RowLayout(horizontal ? SWT.HORIZONTAL : SWT.VERTICAL);
+        rl.spacing = spacing;
+        rl.center = true;
+        rl.marginBottom = rl.marginLeft = rl.marginRight = rl.marginTop = margin;
+        rl.wrap = wrap;
+        return rl;
+    }
+
     private static String defaultFontName = null;
     private static int defaultFontSize = 0;
     private static int defaultFontStyle = 0;
+    private static int defaultLineHeight = 0;
     private static int DPI_Y = 0;
 
     private static void checkControl(Control control) {
@@ -115,12 +128,21 @@ public final class SwtUtils {
             defaultFontSize = fd.getHeight();
             defaultFontStyle = fd.getStyle();
             DPI_Y = control.getDisplay().getDPI().y;
+
+            GC gc = new GC(control);
+            FontMetrics fm = gc.getFontMetrics();
+            defaultLineHeight = fm.getAscent() + fm.getLeading() + fm.getDescent();
+            gc.dispose();
         }
     }
 
     public static int ComputeHeaderHeight(Group group, double lineHeight) {
         checkControl(group);
         return (int) (((defaultFontSize * DPI_Y) / 72.0) * lineHeight);
+    }
+
+    public static int ComputeLineSpacing(double lineHeight) {
+        return (int) (((defaultFontSize * DPI_Y) / 72.0) * lineHeight) - defaultLineHeight;
     }
 
     /**

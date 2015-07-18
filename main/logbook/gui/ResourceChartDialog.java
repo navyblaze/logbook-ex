@@ -15,20 +15,23 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.TimeUnit;
 
 import logbook.config.AppConfig;
 import logbook.constants.AppConstants;
 import logbook.dto.chart.Resource;
 import logbook.dto.chart.ResourceLog;
 import logbook.dto.chart.ResourceLog.SortableLog;
+import logbook.gui.logic.ColorManager;
 import logbook.gui.logic.ResourceChart;
 import logbook.gui.logic.ResourceChart.ActiveLevel;
 import logbook.gui.logic.TableItemCreator;
+import logbook.internal.LoggerHolder;
 import logbook.scripting.TableItemCreatorProxy;
 
 import org.apache.commons.io.FilenameUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.SashForm;
 import org.eclipse.swt.events.MouseEvent;
@@ -64,7 +67,6 @@ import org.eclipse.swt.widgets.MessageBox;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableColumn;
-import org.eclipse.wb.swt.SWTResourceManager;
 
 /**
  * 資材チャートのダイアログ
@@ -73,7 +75,7 @@ import org.eclipse.wb.swt.SWTResourceManager;
 public final class ResourceChartDialog extends WindowBase {
 
     /** ロガー */
-    private static final Logger LOG = LogManager.getLogger(ResourceChartDialog.class);
+    private static final LoggerHolder LOG = new LoggerHolder(ResourceChartDialog.class);
 
     /** スケールテキスト */
     private static final String[] SCALE_TEXT = { "1日", "1週間", "2週間", "1ヶ月", "2ヶ月", "3ヶ月", "半年", "1年" };
@@ -103,6 +105,9 @@ public final class ResourceChartDialog extends WindowBase {
     private List<String[]> body = new ArrayList<>();
     /** 最後に読み込んだ時間 */
     private Date lastLoadDate = new Date(0);
+
+    /** 更新タイマー */
+    protected Timer timer;
 
     private int nextActivated = -1;
     private int nowActivated = -1;
@@ -143,6 +148,11 @@ public final class ResourceChartDialog extends WindowBase {
         this.registerEvents();
         this.setWindowInitialized(true);
         this.setVisible(true);
+
+        // 更新タイマー
+        this.timer = new Timer(true);
+        // 10分毎に再読み込みするようにスケジュールする
+        this.timer.schedule(new CyclicReloadTask(), 0, TimeUnit.MINUTES.toMillis(10));
     }
 
     /**
@@ -170,13 +180,18 @@ public final class ResourceChartDialog extends WindowBase {
         glShell.horizontalSpacing = 2;
         this.shell.setLayout(glShell);
 
-        this.menubar = new Menu(this.shell, SWT.BAR);
-        this.shell.setMenuBar(this.menubar);
+        this.createMenubar();
+        this.menubar = this.getMenubar();
 
-        MenuItem fileroot = new MenuItem(this.menubar, SWT.CASCADE);
-        fileroot.setText("ファイル");
-        this.filemenu = new Menu(fileroot);
-        fileroot.setMenu(this.filemenu);
+        if (this.isNoMenubar()) {
+            this.filemenu = this.menubar;
+        }
+        else {
+            MenuItem fileroot = new MenuItem(this.menubar, SWT.CASCADE);
+            fileroot.setText("ファイル");
+            this.filemenu = new Menu(fileroot);
+            fileroot.setMenu(this.filemenu);
+        }
 
         MenuItem save = new MenuItem(this.filemenu, SWT.NONE);
         save.setText("画像ファイルとして保存(&S)\tCtrl+S");
@@ -268,7 +283,7 @@ public final class ResourceChartDialog extends WindowBase {
             Image image = new Image(check.getDisplay(), new Rectangle(0, 0, textExtent.x, textExtent.y));
             GC gcImage = new GC(image);
             gcImage.setBackground(check.getDisplay().getSystemColor(SWT.COLOR_WIDGET_BACKGROUND));
-            gcImage.setForeground(SWTResourceManager.getColor(colors[i]));
+            gcImage.setForeground(ColorManager.getColor(colors[i]));
             gcImage.drawText(text, 0, 0);
             gcImage.dispose();
             check.setImage(image);
@@ -426,7 +441,7 @@ public final class ResourceChartDialog extends WindowBase {
             }
         } catch (Exception e) {
             image.dispose();
-            LOG.warn("グラフの描画で例外が発生しました", e);
+            LOG.get().warn("グラフの描画で例外が発生しました", e);
         }
         return image;
     }
@@ -587,6 +602,31 @@ public final class ResourceChartDialog extends WindowBase {
         @Override
         public void widgetSelected(SelectionEvent e) {
             ResourceChartDialog.this.saveImage();
+        }
+    }
+
+    /**
+     * テーブルを定期的に再読み込みする
+     */
+    protected class CyclicReloadTask extends TimerTask {
+
+        @Override
+        public void run() {
+            ResourceChartDialog.this.shell.getDisplay().asyncExec(new Runnable() {
+                @Override
+                public void run() {
+                    if (!ResourceChartDialog.this.shell.isDisposed()) {
+                        // 見えているときだけ処理する
+                        if (ResourceChartDialog.this.shell.isVisible()) {
+                            ResourceChartDialog.this.updateContents();
+                        }
+                    }
+                    else {
+                        // ウインドウが消えていたらタスクをキャンセルする
+                        CyclicReloadTask.this.cancel();
+                    }
+                }
+            });
         }
     }
 }

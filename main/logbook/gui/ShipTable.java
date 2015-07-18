@@ -131,19 +131,21 @@ public final class ShipTable extends AbstractTableDialog implements ShipGroupLis
         this.filterMenu = new FilterMenu(this.menubar);
 
         // 成長の余地を表示メニュー
+        new MenuItem(this.opemenu, SWT.SEPARATOR);
         this.switchdiff = new MenuItem(this.opemenu, SWT.CHECK);
         this.switchdiff.setText("成長の余地を表示");
         this.switchdiff.setSelection(this.specdiff);
         this.switchdiff.addSelectionListener(switchDiffListener);
 
-        // セパレータ
-        new MenuItem(this.tablemenu, SWT.SEPARATOR);
-
-        // 成長の余地を表示メニュー
-        this.switchdiff2 = new MenuItem(this.tablemenu, SWT.CHECK);
-        this.switchdiff2.setText("成長の余地を表示");
-        this.switchdiff2.setSelection(this.specdiff);
-        this.switchdiff2.addSelectionListener(switchDiffListener);
+        if (!this.isNoMenubar()) {
+            // セパレータ
+            new MenuItem(this.tablemenu, SWT.SEPARATOR);
+            // 成長の余地を表示メニュー
+            this.switchdiff2 = new MenuItem(this.tablemenu, SWT.CHECK);
+            this.switchdiff2.setText("成長の余地を表示");
+            this.switchdiff2.setSelection(this.specdiff);
+            this.switchdiff2.addSelectionListener(switchDiffListener);
+        }
 
         // セパレータ
         new MenuItem(this.tablemenu, SWT.SEPARATOR);
@@ -230,7 +232,9 @@ public final class ShipTable extends AbstractTableDialog implements ShipGroupLis
     private void switchSpecDiff(MenuItem source) {
         this.specdiff = source.getSelection();
         this.switchdiff.setSelection(this.specdiff);
-        this.switchdiff2.setSelection(this.specdiff);
+        if (this.switchdiff2 != null) {
+            this.switchdiff2.setSelection(this.specdiff);
+        }
         this.reloadTable();
     }
 
@@ -249,7 +253,7 @@ public final class ShipTable extends AbstractTableDialog implements ShipGroupLis
     protected String getTitleMain() {
         String name = AppConfig.get().getShipTableNames()[this.index];
         if ((this.filter != null) &&
-                (this.filter.groupMode) &&
+                (this.filter.groupMode == 0) &&
                 (this.filter.group != null))
         {
             return name + " (" + this.filter.group.getName() + ")";
@@ -505,15 +509,11 @@ public final class ShipTable extends AbstractTableDialog implements ShipGroupLis
 
         private void switchMenuSelected(SelectionEvent e) {
             MenuItem selectedItem = (MenuItem) e.widget;
-            if (selectedItem.getSelection() == false) {
-                // OFFにはできない
-                selectedItem.setSelection(true);
-            }
-            else {
-                ShipTable.this.filterCompo.setGroupMode(selectedItem == this.groupMenuItem);
-                ShipTable.this.updateFilter(ShipTable.this.filterCompo.createFilter(), true);
-                ShipTable.this.getShell().layout();
-            }
+            int mode = !selectedItem.getSelection() ? 2 :
+                    (selectedItem == this.groupMenuItem) ? 0 : 1;
+            ShipTable.this.filterCompo.setGroupMode(mode);
+            ShipTable.this.updateFilter(ShipTable.this.filterCompo.createFilter(), true);
+            ShipTable.this.getShell().layout();
         }
 
         public void setPanelVisible(boolean panelVisible, boolean etcVisible) {
@@ -521,16 +521,16 @@ public final class ShipTable extends AbstractTableDialog implements ShipGroupLis
             this.etcMenuItem.setSelection(etcVisible);
         }
 
-        private void setGroupMode(boolean group) {
-            this.groupMenuItem.setSelection(group);
-            this.typeMenuItem.setSelection(!group);
+        private void setGroupMode(int mode) {
+            this.groupMenuItem.setSelection(mode == 0);
+            this.typeMenuItem.setSelection(mode == 1);
         }
 
         private void groupWidgetSelected(SelectionEvent e) {
             MenuItem selectedItem = (MenuItem) e.widget;
             boolean selection = selectedItem.getSelection();
             ShipFilterDto filter = ShipTable.this.filter;
-            filter.groupMode = true;
+            filter.groupMode = 0;
             if (selection) {
                 ShipGroupBean bean = (ShipGroupBean) e.widget.getData();
                 filter.group = bean;
@@ -548,7 +548,7 @@ public final class ShipTable extends AbstractTableDialog implements ShipGroupLis
             }
             ShipTable.this.updateFilter(filter);
             ShipTable.this.filterCompo.applyFilter(filter);
-            this.setGroupMode(true);
+            this.setGroupMode(0);
             ShipTable.this.getShell().layout();
         }
 
@@ -591,7 +591,7 @@ public final class ShipTable extends AbstractTableDialog implements ShipGroupLis
             for (MenuItem item : this.groupItems) {
                 item.setSelection(false);
             }
-            if ((filter.group != null) && filter.groupMode) {
+            if ((filter.group != null) && (filter.groupMode == 0)) {
                 int idx = ShipGroupConfig.get().getGroup().indexOf(filter.group);
                 if (idx != -1) {
                     this.groupItems.get(idx).setSelection(true);

@@ -27,6 +27,7 @@ import java.util.regex.PatternSyntaxException;
 import logbook.config.AppConfig;
 import logbook.constants.AppConstants;
 import logbook.data.context.GlobalContext;
+import logbook.dto.BasicInfoDto;
 import logbook.dto.BattleExDto;
 import logbook.dto.BattleResultDto;
 import logbook.dto.CreateItemDto;
@@ -45,11 +46,15 @@ import logbook.dto.ShipFilterDto;
 import logbook.dto.UseItemDto;
 import logbook.internal.BattleResultFilter;
 import logbook.internal.BattleResultServer;
+import logbook.internal.LoggerHolder;
 import logbook.internal.MasterData;
 import logbook.internal.MasterData.MissionDto;
+import logbook.scripting.BattleLogProxy;
 import logbook.scripting.ItemInfoListener;
 import logbook.scripting.ItemInfoProxy;
 import logbook.scripting.MissionProxy;
+import logbook.scripting.QuestListener;
+import logbook.scripting.QuestProxy;
 import logbook.scripting.ShipItemListener;
 import logbook.scripting.ShipItemProxy;
 import logbook.util.ReportUtils;
@@ -59,8 +64,6 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import au.com.bytecode.opencsv.CSVReader;
 
@@ -71,7 +74,7 @@ import au.com.bytecode.opencsv.CSVReader;
 public final class CreateReportLogic {
 
     /** ロガー */
-    private static final Logger LOG = LogManager.getLogger(CreateReportLogic.class);
+    private static final LoggerHolder LOG = new LoggerHolder(CreateReportLogic.class);
 
     /**
      * ドロップ報告書のヘッダー
@@ -81,7 +84,7 @@ public final class CreateReportLogic {
     public static String[] getBattleResultHeader() {
         return ArrayUtils.addAll(new String[] {
                 "No.", "日付", "海域", "マス", "出撃", "ランク", "敵艦隊", "ドロップ艦種", "ドロップ艦娘" },
-                BattleResultServer.get().getExtHeader());
+                BattleLogProxy.get().header());
     }
 
     /**
@@ -354,11 +357,13 @@ public final class CreateReportLogic {
         List<Comparable[]> body = new ArrayList<Comparable[]>();
         ItemInfoListener script = ItemInfoProxy.get();
         int count = 0;
+        script.begin();
         for (ItemInfo itemInfo : countitems) {
             body.add(ArrayUtils.addAll(new Comparable[] {
                     new TableRowHeader(++count, itemInfo) },
                     script.body(itemInfo)));
         }
+        script.end();
         return body;
     }
 
@@ -385,7 +390,7 @@ public final class CreateReportLogic {
         Set<Integer> missionSet = GlobalContext.getMissionShipSet();
         List<Comparable[]> body = new ArrayList<Comparable[]>();
         ShipItemListener script = ShipItemProxy.get();
-        script.begin(specdiff);
+        script.begin(specdiff, filter);
         int count = 0;
         for (ShipDto ship : GlobalContext.getShipMap().values()) {
             if ((filter != null) && !shipFilter(ship, filter, missionSet)) {
@@ -494,7 +499,9 @@ public final class CreateReportLogic {
      * @return 任務一覧のヘッダー
      */
     public static String[] getCreateQuestHeader() {
-        return new String[] { "No.", "表示位置", "状態", "進捗", "タイトル", "内容", "燃料", "弾薬", "鋼材", "ボーキ" };
+        return ArrayUtils.addAll(new String[] {
+                "No."
+        }, QuestProxy.get().header());
     }
 
     /**
@@ -503,23 +510,17 @@ public final class CreateReportLogic {
     public static List<Comparable[]> getQuestBody() {
         List<Comparable[]> body = new ArrayList<Comparable[]>();
 
+        QuestListener script = QuestProxy.get();
+        script.begin();
         for (QuestDto quest : GlobalContext.getQuest()) {
             if (quest == null)
                 continue;
 
-            body.add(new Comparable[] {
-                    new TableRowHeader(quest.getNo(), quest),
-                    "" + quest.getPage() + "-" + quest.getPos(),
-                    quest.getStateString(),
-                    quest.getProgressString(),
-                    quest.getTitle(),
-                    quest.getDetail(),
-                    quest.getFuel(),
-                    quest.getAmmo(),
-                    quest.getMetal(),
-                    quest.getBauxite()
-            });
+            body.add(ArrayUtils.addAll(new Comparable[] {
+                    new TableRowHeader(quest.getNo(), quest)
+            }, script.body(quest)));
         }
+        script.end();
         return body;
     }
 
@@ -529,32 +530,32 @@ public final class CreateReportLogic {
      * @return ヘッダー
      */
     public static String[] getMaterialHeader() {
-        return new String[] { "No.", "日付", "直前のイベント", "燃料", "弾薬", "鋼材", "ボーキ", "高速修復材", "高速建造材", "開発資材", "改修資材" };
+        return new String[] { "No.", "日付", "直前のイベント", "燃料", "弾薬", "鋼材", "ボーキ",
+                "高速修復材", "高速建造材", "開発資材", "改修資材", "司令部Lv", "提督Exp" };
     }
 
     /**
      * @param materials 資材
      * @return 資材の内容
      */
-    public static List<Comparable[]> getMaterialStoreBody(List<MaterialDto> materials) {
+    public static List<Comparable[]> getMaterialStoreBody(MaterialDto material, BasicInfoDto basic) {
         List<Comparable[]> body = new ArrayList<Comparable[]>();
 
-        for (int i = 0; i < materials.size(); i++) {
-            MaterialDto material = materials.get(i);
-            body.add(new Comparable[] {
-                    i + 1,
-                    new DateTimeString(material.getTime()),
-                    material.getEvent(),
-                    material.getFuel(),
-                    material.getAmmo(),
-                    material.getMetal(),
-                    material.getBauxite(),
-                    material.getBucket(), // 間違えてバーナーとバケツを逆にしちゃったけど仕方ない・・・
-                    material.getBurner(),
-                    material.getResearch(),
-                    material.getScrew()
-            });
-        }
+        body.add(new Comparable[] {
+                1,
+                new DateTimeString(material.getTime()),
+                material.getEvent(),
+                material.getFuel(),
+                material.getAmmo(),
+                material.getMetal(),
+                material.getBauxite(),
+                material.getBucket(), // 間違えてバーナーとバケツを逆にしちゃったけど仕方ない・・・
+                material.getBurner(),
+                material.getResearch(),
+                material.getScrew(),
+                basic.getLevel(),
+                basic.getExperience()
+        });
 
         return body;
     }
@@ -787,7 +788,7 @@ public final class CreateReportLogic {
             }
         }
 
-        if (filter.groupMode == false) {
+        if (filter.groupMode == 1) {
             // 艦種でフィルタ
             if ((filter.enabledType != null) &&
                     (filter.enabledType[ship.getStype()] == false))
@@ -795,7 +796,7 @@ public final class CreateReportLogic {
                 return false;
             }
         }
-        else {
+        else if (filter.groupMode == 0) {
             // グループでフィルタ
             if (filter.group != null) {
                 if (!filter.group.getShips().contains(ship.getId())) {
@@ -821,7 +822,7 @@ public final class CreateReportLogic {
                     CreateReportLogic.getBattleResultStoreHeader(),
                     CreateReportLogic.getBattleResultStoreBody(dtoList), true);
         } catch (IOException e) {
-            LOG.warn("報告書の保存に失敗しました", e);
+            LOG.get().warn("報告書の保存に失敗しました", e);
         }
     }
 
@@ -840,7 +841,7 @@ public final class CreateReportLogic {
                     CreateReportLogic.getCreateShipHeader(),
                     CreateReportLogic.getCreateShipBody(dtoList), true);
         } catch (IOException e) {
-            LOG.warn("報告書の保存に失敗しました", e);
+            LOG.get().warn("報告書の保存に失敗しました", e);
         }
     }
 
@@ -860,7 +861,7 @@ public final class CreateReportLogic {
                 reader.close();
             }
         } catch (Exception e) {
-            LOG.warn("建造報告書の読み込みに失敗しました", e);
+            LOG.get().warn("建造報告書の読み込みに失敗しました", e);
         }
         return dtoList;
     }
@@ -880,7 +881,7 @@ public final class CreateReportLogic {
                     CreateReportLogic.getCreateItemHeader(),
                     CreateReportLogic.getCreateItemBody(dtoList), true);
         } catch (IOException e) {
-            LOG.warn("報告書の保存に失敗しました", e);
+            LOG.get().warn("報告書の保存に失敗しました", e);
         }
     }
 
@@ -900,7 +901,7 @@ public final class CreateReportLogic {
                 reader.close();
             }
         } catch (Exception e) {
-            LOG.warn("開発報告書の読み込みに失敗しました", e);
+            LOG.get().warn("開発報告書の読み込みに失敗しました", e);
         }
         return dtoList;
     }
@@ -920,7 +921,7 @@ public final class CreateReportLogic {
                     CreateReportLogic.getMissionResultHeader(),
                     CreateReportLogic.getMissionResultBody(dtoList), true);
         } catch (IOException e) {
-            LOG.warn("報告書の保存に失敗しました", e);
+            LOG.get().warn("報告書の保存に失敗しました", e);
         }
     }
 
@@ -940,7 +941,7 @@ public final class CreateReportLogic {
                 reader.close();
             }
         } catch (Exception e) {
-            LOG.warn("遠征報告書の読み込みに失敗しました", e);
+            LOG.get().warn("遠征報告書の読み込みに失敗しました", e);
         }
         return dtoList;
     }
@@ -950,19 +951,17 @@ public final class CreateReportLogic {
      * 
      * @param material 資材
      */
-    public static void storeMaterialReport(MaterialDto material) {
+    public static void storeMaterialReport(MaterialDto material, BasicInfoDto basic) {
         try {
             if (material != null) {
-                List<MaterialDto> dtoList = Collections.singletonList(material);
-
                 File report = getStoreFile(AppConstants.LOG_RESOURCE, AppConstants.LOG_RESOURCE_ALT);
 
                 CreateReportLogic.writeCsvStripFirstColumn(report,
                         CreateReportLogic.getMaterialHeader(),
-                        CreateReportLogic.getMaterialStoreBody(dtoList), true);
+                        CreateReportLogic.getMaterialStoreBody(material, basic), true);
             }
         } catch (IOException e) {
-            LOG.warn("報告書の保存に失敗しました", e);
+            LOG.get().warn("報告書の保存に失敗しました", e);
         }
     }
 
@@ -981,7 +980,7 @@ public final class CreateReportLogic {
                         CreateReportLogic.getLostStoreBody(dtoList), true);
             }
         } catch (IOException e) {
-            LOG.warn("報告書の保存に失敗しました", e);
+            LOG.get().warn("報告書の保存に失敗しました", e);
         }
     }
 

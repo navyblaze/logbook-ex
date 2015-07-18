@@ -11,6 +11,7 @@ import logbook.dto.DockDto;
 import logbook.dto.EnemyShipDto;
 import logbook.dto.ResultRank;
 import logbook.dto.ShipDto;
+import logbook.gui.logic.ColorManager;
 import logbook.gui.logic.DamageRate;
 import logbook.gui.logic.LayoutLogic;
 
@@ -22,7 +23,6 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.MenuItem;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.wb.swt.SWTResourceManager;
 
 /**
  * @author Nekopanda
@@ -68,7 +68,7 @@ public class BattleWindowSmall extends BattleWindow {
     }
 
     private void createHpLabels(Label[][] labels, int i) {
-        labels[0][i] = this.addLabel("000"); //0 開始時HP
+        labels[0][i] = this.addLabel("000/000"); //0 開始時HP
         labels[1][i] = this.addLabel("000"); //2 Dmg
         labels[2][i] = this.addLabel("000"); //3 後HP
     }
@@ -356,7 +356,7 @@ public class BattleWindowSmall extends BattleWindow {
 
         ResultRank rank = lastPhase.getEstimatedRank();
         if ((rank == ResultRank.C) || (rank == ResultRank.D) || (rank == ResultRank.E)) {
-            this.resultCompo.setBackground(SWTResourceManager.getColor(AppConstants.LOSE_BATTLE_COLOR));
+            this.resultCompo.setBackground(ColorManager.getColor(AppConstants.LOSE_BATTLE_COLOR));
         }
         else {
             this.resultCompo.setBackground(null);

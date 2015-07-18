@@ -7,7 +7,6 @@ import logbook.constants.AppConstants;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Color;
-import org.eclipse.wb.swt.SWTResourceManager;
 
 /**
  * @author Nekopanda
@@ -15,20 +14,20 @@ import org.eclipse.wb.swt.SWTResourceManager;
  */
 public enum DamageRate {
 
-    MUKIZU("無傷", 0, null, null),
+    MUKIZU("無傷", 0, ColorManager.getColor(AppConstants.MUKIZU_SHIP_COLOR), null),
     KENZAI("健在", 1, null, null),
-    SYOHA("小破", 2, SWTResourceManager.getColor(AppConstants.SYOHA_SHIP_COLOR), null),
+    SYOHA("小破", 2, ColorManager.getColor(AppConstants.SYOHA_SHIP_COLOR), null),
     TYUHA("中破", 3,
-            SWTResourceManager.getColor(AppConstants.COND_ORANGE_COLOR),
-            SWTResourceManager.getColor(SWT.COLOR_WHITE)),
+            ColorManager.getColor(AppConstants.TYUHA_SHIP_COLOR),
+            ColorManager.getColor(AppConstants.TYUHA_FORGROUNG_COLOR)),
     TAIHA("大破", 4,
-            SWTResourceManager.getColor(AppConstants.COND_RED_COLOR),
-            SWTResourceManager.getColor(SWT.COLOR_WHITE)),
+            ColorManager.getColor(AppConstants.TAIHA_SHIP_COLOR),
+            ColorManager.getColor(SWT.COLOR_WHITE)),
     GOTIN("轟沈", 5,
-            SWTResourceManager.getColor(AppConstants.SUNK_SHIP_COLOR),
-            SWTResourceManager.getColor(SWT.COLOR_WHITE)),
+            ColorManager.getColor(AppConstants.SUNK_SHIP_COLOR),
+            ColorManager.getColor(SWT.COLOR_WHITE)),
     ESCAPED("退避", -1,
-            SWTResourceManager.getColor(AppConstants.ESCAPED_SHIP_COLOR), null);
+            ColorManager.getColor(AppConstants.ESCAPED_SHIP_COLOR), null);
 
     private final String str;
     private final int level;

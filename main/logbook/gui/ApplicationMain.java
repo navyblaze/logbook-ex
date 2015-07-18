@@ -1,10 +1,15 @@
 package logbook.gui;
 
 import java.awt.Desktop;
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
@@ -13,10 +18,9 @@ import java.util.List;
 import java.util.Set;
 
 import logbook.config.AppConfig;
-import logbook.config.ItemConfig;
-import logbook.config.ItemMasterConfig;
-import logbook.config.ShipConfig;
 import logbook.config.ShipGroupConfig;
+import logbook.config.UserDataConfig;
+import logbook.config.bean.AppConfigBean;
 import logbook.constants.AppConstants;
 import logbook.data.context.GlobalContext;
 import logbook.dto.BattleExDto;
@@ -30,6 +34,7 @@ import logbook.gui.listener.HelpEventListener;
 import logbook.gui.listener.MainShellAdapter;
 import logbook.gui.listener.TrayItemMenuListener;
 import logbook.gui.listener.TraySelectionListener;
+import logbook.gui.logic.ColorManager;
 import logbook.gui.logic.LayoutLogic;
 import logbook.gui.logic.PushNotify;
 import logbook.gui.logic.Sound;
@@ -37,8 +42,11 @@ import logbook.gui.widgets.FleetComposite;
 import logbook.internal.BattleResultServer;
 import logbook.internal.EnemyData;
 import logbook.internal.Item;
+import logbook.internal.LoggerHolder;
 import logbook.internal.MasterData;
 import logbook.internal.Ship;
+import logbook.internal.ShipParameterRecord;
+import logbook.scripting.ScriptData;
 import logbook.server.proxy.DatabaseClient;
 import logbook.server.proxy.ProxyServer;
 import logbook.thread.ThreadManager;
@@ -46,8 +54,7 @@ import logbook.thread.ThreadStateObserver;
 import logbook.util.JIntellitypeWrapper;
 import logbook.util.SwtUtils;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.apache.commons.lang3.ArrayUtils;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
@@ -57,10 +64,9 @@ import org.eclipse.swt.events.ShellAdapter;
 import org.eclipse.swt.events.ShellEvent;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.FillLayout;
-import org.eclipse.swt.layout.FormAttachment;
-import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
+import org.eclipse.swt.layout.RowLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
@@ -86,13 +92,15 @@ import com.melloware.jintellitype.HotkeyListener;
  */
 public final class ApplicationMain extends WindowBase {
 
+    private static final long startTime = System.currentTimeMillis();
+
     /** ロガー */
-    private static final Logger LOG = LogManager.getLogger(ApplicationMain.class);
+    private static final LoggerHolder LOG = new LoggerHolder(ApplicationMain.class);
 
     private static final int MAX_LOG_LINES = 200;
     private static final DateFormat LOG_DATE_FORMAT = new SimpleDateFormat(AppConstants.DATE_SHORT_FORMAT);
 
-    private static final long startTime = System.currentTimeMillis();
+    private static final LoggerHolder userLogger = new LoggerHolder("user");
 
     public static void sysPrint(String mes) {
         System.out.println(mes + ": " + (System.currentTimeMillis() - startTime) + " ms");
@@ -118,6 +126,52 @@ public final class ApplicationMain extends WindowBase {
 
     public static ApplicationMain main;
     public static boolean disableUpdate;
+    private static ApplicationLock applicationLock = new ApplicationLock();
+
+    private static final class ApplicationLock {
+        private FileOutputStream fos;
+        private FileChannel fchan;
+        private FileLock flock;
+        private boolean isError;
+
+        public ApplicationLock() {
+            try {
+                File dir = AppConstants.LOCK_FILE.getParentFile();
+                if (!dir.exists()) {
+                    dir.mkdirs();
+                }
+                this.fos = new FileOutputStream(AppConstants.LOCK_FILE);
+                this.fchan = this.fos.getChannel();
+                this.flock = this.fchan.tryLock();
+            } catch (IOException e) {
+                this.isError = true;
+                LOG.get().warn("ファイルロックでエラー", e);
+            }
+        }
+
+        public boolean isLocked() {
+            return (this.flock != null);
+        }
+
+        public boolean isError() {
+            return this.isError;
+        }
+
+        public void release() {
+            try {
+                if (this.flock != null) {
+                    this.flock.release();
+                }
+                this.fchan.close();
+                this.fos.close();
+                if (this.flock != null) {
+                    AppConstants.LOCK_FILE.delete();
+                }
+            } catch (IOException e) {
+                LOG.get().warn("ファイルロック解放でエラー", e);
+            }
+        }
+    }
 
     /**
      * <p>
@@ -127,24 +181,29 @@ public final class ApplicationMain extends WindowBase {
     private static final class ShutdownHookThread implements Runnable {
 
         /** ロガー */
-        private static final Logger LOG = LogManager.getLogger(ShutdownHookThread.class);
+        private static final LoggerHolder LOG = new LoggerHolder(ShutdownHookThread.class);
 
         @Override
         public void run() {
             try {
-                // スレッドを終了する
-                endThread();
 
                 // 設定を書き込みます
                 AppConfig.store();
-                ShipConfig.store();
                 ShipGroupConfig.store();
-                ItemMasterConfig.store();
-                ItemConfig.store();
+                UserDataConfig.store();
                 MasterData.store();
                 EnemyData.store();
+                ShipParameterRecord.store();
+                ScriptData.store();
+
+                // スレッドを終了する
+                endThread();
+
+                // ロック解放
+                applicationLock.release();
+
             } catch (Exception e) {
-                LOG.fatal("シャットダウンスレッドで異常終了しました", e);
+                LOG.get().fatal("シャットダウンスレッドで異常終了しました", e);
             }
         }
     }
@@ -196,15 +255,15 @@ public final class ApplicationMain extends WindowBase {
     private BattleAggDialog battleCounterWindow;
     /** グループエディター */
     private ShipFilterGroupDialog shipFilterGroupWindow;
-    /** グループエディター */
+    /** 資材チャート */
     private ResourceChartDialog resourceChartWindow;
-    /** ツール */
+    /** ツールウィンドウ */
     private LauncherWindow launcherWindow;
+    /** 艦隊1-4 */
+    private final FleetWindow[] fleetWindows = new FleetWindow[4];
 
     /** コマンドボタン */
     private Composite commandComposite;
-    /** 縮小表示メニューアイテム */
-    private MenuItem dispsize;
     /** 所有装備 */
     private Button itemList;
     /** 所有艦娘 */
@@ -213,26 +272,37 @@ public final class ApplicationMain extends WindowBase {
     private CTabFolder tabFolder;
     /** メインコンポジット */
     private Composite mainComposite;
+
+    private Group notifySettingGroup;
+    /** 遠征通知 */
+    private Button deckNotice;
+    /** 入渠通知 */
+    private Button ndockNotice;
+    /** 泊地修理通知 */
+    private Button akashiNotice;
+    /** 疲労通知 */
+    private Button condNotice;
+
     /** 遠征グループ */
     private Group deckGroup;
-    /** 1分前に通知する(遠征) */
-    private Button deckNotice;
-    /** 遠征.艦隊2の艦隊名 */
+    /** 艦隊.艦隊1の艦隊名 */
     private Label deck1name;
-    /** 遠征.艦隊2の帰投時間 */
+    /** 艦隊.艦隊1の帰投時間 */
     private Text deck1time;
-    /** 遠征.艦隊3の艦隊名 */
+    /** 艦隊.艦隊2の艦隊名 */
     private Label deck2name;
-    /** 遠征.艦隊3の帰投時間 */
+    /** 艦隊.艦隊2の帰投時間 */
     private Text deck2time;
-    /** 遠征.艦隊4の艦隊名 */
+    /** 艦隊.艦隊3の艦隊名 */
     private Label deck3name;
-    /** 遠征.艦隊4の帰投時間 */
+    /** 艦隊.艦隊3の帰投時間 */
     private Text deck3time;
+    /** 艦隊.艦隊4の艦隊名 */
+    private Label deck4name;
+    /** 艦隊.艦隊4の帰投時間 */
+    private Text deck4time;
     /** 入渠グループ **/
     private Group ndockGroup;
-    /** 1分前に通知する(入渠) */
-    private Button ndockNotice;
     /** 入渠.ドッグ1.艦娘の名前 **/
     private Label ndock1name;
     /** 入渠.ドッグ1.お風呂から上がる時間 **/
@@ -249,8 +319,13 @@ public final class ApplicationMain extends WindowBase {
     private Label ndock4name;
     /** 入渠.ドッグ4.お風呂から上がる時間 **/
     private Text ndock4time;
-    /** コンソールコンポジット **/
-    private Composite consoleComposite;
+
+    /** その他グループ**/
+    private Composite otherGroup;
+
+    private Label condTimerLabel;
+    private Text condTimerTime;
+
     /** エラー表示 **/
     private Label errorLabel;
     /** コンソール **/
@@ -264,8 +339,14 @@ public final class ApplicationMain extends WindowBase {
         try {
             // グループ化のためのアプリケーションID (Windows 7以降)
             Display.setAppName(AppConstants.NAME);
-            // 設定読み込み
             sysPrint("起動");
+            // 多重起動チェック
+            if (!applicationLock.isError() && !applicationLock.isLocked()) {
+                printErrorMessageBox();
+                applicationLock.release();
+                return;
+            }
+            // 設定読み込み
             AppConfig.load();
             /*　static initializer に移行
             ShipConfig.load();
@@ -283,12 +364,21 @@ public final class ApplicationMain extends WindowBase {
             sysPrint("メインウィンドウ初期化開始");
             main.restore();
         } catch (Error e) {
-            LOG.fatal("メインスレッドが異常終了しました", e);
+            LOG.get().fatal("メインスレッドが異常終了しました", e);
         } catch (Exception e) {
-            LOG.fatal("メインスレッドが異常終了しました", e);
+            LOG.get().fatal("メインスレッドが異常終了しました", e);
         } finally {
             endThread();
         }
+    }
+
+    private static void printErrorMessageBox() {
+        Shell shell = new Shell(Display.getDefault(), SWT.TOOL);
+        MessageBox mes = new MessageBox(shell, SWT.ICON_WARNING | SWT.OK);
+        mes.setText(AppConstants.TITLEBAR_TEXT);
+        mes.setMessage("多重起動を検出しました。起動中の航海日誌拡張版を終了してください。");
+        mes.open();
+        shell.dispose();
     }
 
     /**
@@ -330,7 +420,7 @@ public final class ApplicationMain extends WindowBase {
      */
     public void createContents() {
         this.display = Display.getDefault();
-        super.createContents(this.display, SWT.CLOSE | SWT.TITLE | SWT.MIN | SWT.RESIZE, false);
+        super.createContents(this.display, SWT.CLOSE | SWT.TITLE | SWT.MIN | SWT.RESIZE, true);
         this.shell = this.getShell();
         this.shell.setText(AppConstants.TITLEBAR_TEXT);
         this.dummyHolder = new Shell(this.display, SWT.TOOL);
@@ -372,7 +462,7 @@ public final class ApplicationMain extends WindowBase {
                     WindowBase[] windowArray = windows.toArray(new WindowBase[windows.size()]);
                     for (int i = windowArray.length - 1; i >= 0; --i) {
                         WindowBase win = windowArray[i];
-                        if (win.getShell().getVisible() && (win.getActualParent() == ApplicationMain.this.dummyHolder)) {
+                        if (win.getVisible() && (win.getActualParent() == ApplicationMain.this.dummyHolder)) {
                             windowArray[i].setBehindTo(ApplicationMain.this);
                             break;
                         }
@@ -394,8 +484,8 @@ public final class ApplicationMain extends WindowBase {
         });
 
         // メニューバー
-        Menu menubar = new Menu(this.shell, SWT.BAR);
-        this.shell.setMenuBar(menubar);
+        this.createMenubar();
+        Menu menubar = this.getMenubar();
         MenuItem cmdmenuroot = new MenuItem(menubar, SWT.CASCADE);
         cmdmenuroot.setText("コマンド");
         Menu cmdmenu = new Menu(cmdmenuroot);
@@ -497,12 +587,6 @@ public final class ApplicationMain extends WindowBase {
         battleShipWinMenu.setAccelerator(SWT.CTRL + 'P');
         this.battleShipWindow = new BattleShipWindow(this.dummyHolder, battleShipWinMenu);
 
-        // 表示-縮小表示
-        // ウィンドウの右クリックメニューに追加
-        new MenuItem(this.getMenu(), SWT.SEPARATOR);
-        this.dispsize = new MenuItem(this.getMenu(), SWT.CHECK);
-        this.dispsize.setText("縮小表示(&M)\tCtrl+M");
-        this.dispsize.setAccelerator(SWT.CTRL + 'M');
         // セパレータ
         new MenuItem(cmdmenu, SWT.SEPARATOR);
         // 終了
@@ -560,6 +644,11 @@ public final class ApplicationMain extends WindowBase {
         MenuItem toolwindows = new MenuItem(etcmenu, SWT.CHECK);
         toolwindows.setText("ツール");
         this.launcherWindow = new LauncherWindow(this.dummyHolder, toolwindows);
+        // その他-艦隊タブ切り離し
+        MenuItem floatFleetItem = new MenuItem(etcmenu, SWT.CASCADE);
+        floatFleetItem.setText("艦隊タブ切り離し");
+        Menu floatFleetMenu = new Menu(floatFleetItem);
+        floatFleetItem.setMenu(floatFleetMenu);
         // その他-ウィンドウをディスプレイ内に移動
         MenuItem movewindows = new MenuItem(etcmenu, SWT.NONE);
         movewindows.setText("画面外のウィンドウを戻す(&W)\tCtrl+W");
@@ -604,7 +693,7 @@ public final class ApplicationMain extends WindowBase {
                     try {
                         File file = new File("itemInfo.csv");
                         OutputStreamWriter fw = new OutputStreamWriter(
-                                new FileOutputStream(file), AppConstants.CHARSET);
+                                new BufferedOutputStream(new FileOutputStream(file)), AppConstants.CHARSET);
                         Item.dumpCSV(fw);
                         fw.close();
                         SwtUtils.messageDialog("以下のファイルに書き込みました\n" + file.getAbsolutePath(),
@@ -622,7 +711,7 @@ public final class ApplicationMain extends WindowBase {
                     try {
                         File file = new File("shipInfo.csv");
                         OutputStreamWriter fw = new OutputStreamWriter(
-                                new FileOutputStream(file), AppConstants.CHARSET);
+                                new BufferedOutputStream(new FileOutputStream(file)), AppConstants.CHARSET);
                         Ship.dumpCSV(fw);
                         fw.close();
                         SwtUtils.messageDialog("以下のファイルに書き込みました\n" + file.getAbsolutePath(),
@@ -693,27 +782,21 @@ public final class ApplicationMain extends WindowBase {
 
         // メインコンポジット
         this.mainComposite = new Composite(this.tabFolder, SWT.NONE);
-        this.mainComposite.setLayout(new FormLayout());
+        this.mainComposite.setLayout(SwtUtils.makeGridLayout(1, 1, 0, 0, 0));
         this.mainComposite.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
         mainItem.setControl(this.mainComposite);
 
-        // 遠征
-        Label deckLabel = new Label(this.mainComposite, SWT.NONE);
-        deckLabel.setText("遠征");
-        deckLabel.setLayoutData(SwtUtils.makeFormData(
-                new FormAttachment(0, 7), // 7 pixel indent
-                null, // free width
-                new FormAttachment(0),
-                null)); // free height
+        // 通知設定
+        this.notifySettingGroup = new Group(this.mainComposite, SWT.NONE);
+        this.notifySettingGroup.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+        RowLayout notifySettingLayout = new RowLayout(SWT.HORIZONTAL);
+        notifySettingLayout.marginBottom = notifySettingLayout.marginHeight = notifySettingLayout.marginTop = notifySettingLayout.marginWidth = notifySettingLayout.spacing = 0;
+        this.notifySettingGroup.setLayout(notifySettingLayout);
+        this.notifySettingGroup.setText("通知設定");
 
-        this.deckNotice = new Button(this.mainComposite, SWT.CHECK);
+        this.deckNotice = new Button(this.notifySettingGroup, SWT.CHECK);
         this.deckNotice.setSelection(AppConfig.get().isNoticeDeckmission());
-        this.deckNotice.setLayoutData(SwtUtils.makeFormData(
-                null, // free width
-                new FormAttachment(100),
-                new FormAttachment(0),
-                null)); // free height
-        this.deckNotice.setText("1分前に通知する");
+        this.deckNotice.setText("遠征");
         this.deckNotice.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
@@ -721,71 +804,9 @@ public final class ApplicationMain extends WindowBase {
             }
         });
 
-        this.deckGroup = new Group(this.mainComposite, SWT.NONE);
-        this.deckGroup.setLayoutData(SwtUtils.makeFormData(
-                new FormAttachment(0),
-                new FormAttachment(100),
-                new FormAttachment(0),
-                null));
-
-        GridLayout glDeckGroup = new GridLayout(2, false);
-        glDeckGroup.verticalSpacing = 1;
-        // なぜかMacだとスペースが全くないので自分で大きさを計算
-        glDeckGroup.marginTop = Math.max(0,
-                SwtUtils.ComputeHeaderHeight(this.deckGroup, 1.4) - this.deckGroup.getClientArea().y);
-        glDeckGroup.marginWidth = 0;
-        glDeckGroup.marginHeight = 0;
-        glDeckGroup.marginBottom = 0;
-        glDeckGroup.horizontalSpacing = 1;
-        this.deckGroup.setLayout(glDeckGroup);
-
-        this.deck1name = new Label(this.deckGroup, SWT.NONE);
-        this.deck1name.setText("ここに艦隊2の艦隊名が入ります");
-        this.deck1name.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-
-        this.deck1time = new Text(this.deckGroup, SWT.SINGLE | SWT.BORDER);
-        this.deck1time.setText("艦隊2の帰投時間");
-        GridData gddeck1time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
-        gddeck1time.widthHint = 75;
-        this.deck1time.setLayoutData(gddeck1time);
-
-        this.deck2name = new Label(this.deckGroup, SWT.NONE);
-        this.deck2name.setText("ここに艦隊3の艦隊名が入ります");
-        this.deck2name.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-
-        this.deck2time = new Text(this.deckGroup, SWT.SINGLE | SWT.BORDER);
-        this.deck2time.setText("艦隊3の帰投時間");
-        GridData gddeck2time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
-        gddeck2time.widthHint = 75;
-        this.deck2time.setLayoutData(gddeck2time);
-
-        this.deck3name = new Label(this.deckGroup, SWT.NONE);
-        this.deck3name.setText("ここに艦隊4の艦隊名が入ります");
-        this.deck3name.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-
-        this.deck3time = new Text(this.deckGroup, SWT.SINGLE | SWT.BORDER);
-        this.deck3time.setText("艦隊4の帰投時間");
-        GridData gddeck3time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
-        gddeck3time.widthHint = 75;
-        this.deck3time.setLayoutData(gddeck3time);
-
-        // 入渠
-        Label ndockLabel = new Label(this.mainComposite, SWT.NONE);
-        ndockLabel.setText("入渠");
-        ndockLabel.setLayoutData(SwtUtils.makeFormData(
-                new FormAttachment(0, 7), // 7 pixel indent
-                null, // free width
-                new FormAttachment(this.deckGroup),
-                null)); // free height
-
-        this.ndockNotice = new Button(this.mainComposite, SWT.CHECK);
+        this.ndockNotice = new Button(this.notifySettingGroup, SWT.CHECK);
         this.ndockNotice.setSelection(AppConfig.get().isNoticeNdock());
-        this.ndockNotice.setLayoutData(SwtUtils.makeFormData(
-                null, // free width
-                new FormAttachment(100),
-                new FormAttachment(this.deckGroup),
-                null)); // free height
-        this.ndockNotice.setText("1分前に通知する");
+        this.ndockNotice.setText("入渠");
         this.ndockNotice.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
@@ -793,22 +814,77 @@ public final class ApplicationMain extends WindowBase {
             }
         });
 
-        this.ndockGroup = new Group(this.mainComposite, SWT.NONE);
-        this.ndockGroup.setLayoutData(SwtUtils.makeFormData(
-                new FormAttachment(0),
-                new FormAttachment(100),
-                new FormAttachment(this.deckGroup),
-                null));
+        this.akashiNotice = new Button(this.notifySettingGroup, SWT.CHECK);
+        this.akashiNotice.setSelection(AppConfig.get().isNoticeAkashi());
+        this.akashiNotice.setText("泊地修理");
+        this.akashiNotice.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                AppConfig.get().setNoticeAkashi(ApplicationMain.this.akashiNotice.getSelection());
+            }
+        });
 
-        GridLayout glNdockGroup = new GridLayout(2, false);
-        glNdockGroup.verticalSpacing = 1;
-        glNdockGroup.marginTop = Math.max(0,
-                SwtUtils.ComputeHeaderHeight(this.ndockGroup, 1.4) - this.ndockGroup.getClientArea().y);
-        glNdockGroup.marginWidth = 0;
-        glNdockGroup.marginHeight = 0;
-        glNdockGroup.marginBottom = 0;
-        glNdockGroup.horizontalSpacing = 1;
-        this.ndockGroup.setLayout(glNdockGroup);
+        this.condNotice = new Button(this.notifySettingGroup, SWT.CHECK);
+        this.condNotice.setSelection(AppConfig.get().isNoticeCond());
+        this.condNotice.setText("疲労");
+        this.condNotice.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                AppConfig.get().setNoticeCond(ApplicationMain.this.condNotice.getSelection());
+            }
+        });
+
+        // 艦隊
+        this.deckGroup = new Group(this.mainComposite, SWT.NONE);
+        this.deckGroup.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+        this.deckGroup.setText("艦隊");
+        this.deckGroup.setLayout(SwtUtils.makeGridLayout(2, 1, 1, 0, 0));
+
+        this.deck1name = new Label(this.deckGroup, SWT.NONE);
+        this.deck1name.setText("ここに艦隊1の艦隊名が入ります");
+        this.deck1name.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        this.deck1time = new Text(this.deckGroup, SWT.SINGLE | SWT.BORDER);
+        this.deck1time.setText("艦隊1の帰投時間");
+        GridData gddeck1time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
+        gddeck1time.widthHint = 75;
+        this.deck1time.setLayoutData(gddeck1time);
+
+        this.deck2name = new Label(this.deckGroup, SWT.NONE);
+        this.deck2name.setText("ここに艦隊2の艦隊名が入ります");
+        this.deck2name.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        this.deck2time = new Text(this.deckGroup, SWT.SINGLE | SWT.BORDER);
+        this.deck2time.setText("艦隊2の帰投時間");
+        GridData gddeck2time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
+        gddeck2time.widthHint = 75;
+        this.deck2time.setLayoutData(gddeck2time);
+
+        this.deck3name = new Label(this.deckGroup, SWT.NONE);
+        this.deck3name.setText("ここに艦隊3の艦隊名が入ります");
+        this.deck3name.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        this.deck3time = new Text(this.deckGroup, SWT.SINGLE | SWT.BORDER);
+        this.deck3time.setText("艦隊3の帰投時間");
+        GridData gddeck3time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
+        gddeck3time.widthHint = 75;
+        this.deck3time.setLayoutData(gddeck3time);
+
+        this.deck4name = new Label(this.deckGroup, SWT.NONE);
+        this.deck4name.setText("ここに艦隊4の艦隊名が入ります");
+        this.deck4name.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        this.deck4time = new Text(this.deckGroup, SWT.SINGLE | SWT.BORDER);
+        this.deck4time.setText("艦隊4の帰投時間");
+        GridData gddeck4time = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
+        gddeck4time.widthHint = 75;
+        this.deck4time.setLayoutData(gddeck4time);
+
+        // 入渠
+        this.ndockGroup = new Group(this.mainComposite, SWT.NONE);
+        this.ndockGroup.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+        this.ndockGroup.setText("入渠");
+        this.ndockGroup.setLayout(SwtUtils.makeGridLayout(2, 1, 1, 0, 0));
 
         this.ndock1name = new Label(this.ndockGroup, SWT.NONE);
         this.ndock1name.setText("ドッグ1に浸かっている艦娘の名前");
@@ -850,62 +926,102 @@ public final class ApplicationMain extends WindowBase {
         gdndock4time.widthHint = 75;
         this.ndock4time.setLayoutData(gdndock4time);
 
+        // -------
+
+        this.otherGroup = new Composite(this.mainComposite, SWT.NONE);
+        this.otherGroup.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+        this.otherGroup.setLayout(SwtUtils.makeGridLayout(2, 1, 1, 3, 3));
+
+        this.condTimerLabel = new Label(this.otherGroup, SWT.NONE);
+        this.condTimerLabel.setText("次の疲労回復まで");
+        this.condTimerLabel.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        this.condTimerTime = new Text(this.otherGroup, SWT.SINGLE | SWT.BORDER);
+        this.condTimerTime.setText("次の疲労回復までの時間");
+        GridData gdconTimeTime = new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1);
+        gdconTimeTime.widthHint = 75;
+        this.condTimerTime.setLayoutData(gdconTimeTime);
+
+        // -------
+
         // エラー表示
         this.errorLabel = new Label(this.mainComposite, SWT.NONE);
-        this.errorLabel.setLayoutData(SwtUtils.makeFormData(
-                new FormAttachment(0),
-                new FormAttachment(100),
-                new FormAttachment(this.ndockGroup),
-                null));
+        this.errorLabel.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
         this.errorLabel.setAlignment(SWT.CENTER);
-        this.errorLabel.setBackground(SWTResourceManager.getColor(AppConstants.COND_RED_COLOR));
+        this.errorLabel.setBackground(ColorManager.getColor(AppConstants.COND_RED_COLOR));
         this.errorLabel.setText("エラー表示");
+        LayoutLogic.hide(this.errorLabel, true);
         this.errorLabel.setVisible(false);
 
         // コンソール
-        this.consoleComposite = new Composite(this.mainComposite, SWT.NONE);
-        GridLayout loglayout = new GridLayout(1, false);
-        loglayout.verticalSpacing = 1;
-        loglayout.marginTop = 0;
-        loglayout.marginWidth = 0;
-        loglayout.marginHeight = 0;
-        loglayout.marginBottom = 0;
-        loglayout.horizontalSpacing = 1;
-        this.consoleComposite.setLayout(loglayout);
-        this.consoleComposite.setLayoutData(SwtUtils.makeFormData(
-                new FormAttachment(0),
-                new FormAttachment(100),
-                new FormAttachment(this.ndockGroup),
-                new FormAttachment(100)));
-
-        this.console = new org.eclipse.swt.widgets.List(this.consoleComposite, SWT.BORDER | SWT.V_SCROLL);
+        this.console = new org.eclipse.swt.widgets.List(this.mainComposite, SWT.BORDER | SWT.V_SCROLL);
         this.console.setLayoutData(new GridData(GridData.FILL_HORIZONTAL | GridData.FILL_VERTICAL));
+
+        // 艦隊ウィンドウ
+        for (int i = 0; i < this.fleetWindows.length; ++i) {
+            MenuItem menuItem = new MenuItem(floatFleetMenu, SWT.CHECK);
+            menuItem.setText("#" + (i + 1));
+            this.fleetWindows[i] = new FleetWindow(this.dummyHolder, menuItem, this.tabFolder, i + 1);
+        }
+
+        // メニュー表示
+        this.tabFolder.setData("disable-window-menu-this", new Object());
+        this.tabFolder.addListener(SWT.MenuDetect, new Listener() {
+            @Override
+            public void handleEvent(Event event) {
+                CTabFolder tabFolder = ApplicationMain.this.tabFolder;
+                Point point = ApplicationMain.this.display.map(null,
+                        tabFolder, new Point(event.x, event.y));
+                CTabItem item = tabFolder.getItem(point);
+                if (item != null) {
+                    Object data = item.getData();
+                    if (data instanceof FleetWindow) {
+                        FleetWindow fw = (FleetWindow) data;
+                        fw.showTabMenu();
+                        return;
+                    }
+                }
+                // ウィンドウメニューを表示
+                //ApplicationMain.this.getPopupMenu().setVisible(true);
+            }
+        });
+
+        //  ウィンドウの右クリックメニューに追加
+        if (this.getPopupMenu().getItemCount() > 0) {
+            new MenuItem(this.getPopupMenu(), SWT.SEPARATOR);
+        }
+
+        MenuItem showNotifySetting = new MenuItem(this.getPopupMenu(), SWT.CHECK);
+        showNotifySetting.setText("通知設定を表示");
+        this.bindControlToMenuItem(this.notifySettingGroup, showNotifySetting, "ShowNotifySetting");
+
+        MenuItem showCondTimer = new MenuItem(this.getPopupMenu(), SWT.CHECK);
+        showCondTimer.setText("疲労タイマーを表示");
+        this.bindControlToMenuItem(this.otherGroup, showCondTimer, "ShowCondCycleTimer");
+
+        // 縮小表示
+        final MenuItem dispsize = new MenuItem(this.getPopupMenu(), SWT.CHECK);
+        dispsize.setText("縮小表示(&M)\tCtrl+M");
+        dispsize.setAccelerator(SWT.CTRL + 'M');
 
         // 初期設定 縮小表示が有効なら縮小表示にする
         if (AppConfig.get().isMinimumLayout()) {
             this.shell.setRedraw(false);
-            ApplicationMain.this.hide(true, this.commandComposite, this.deckNotice, this.deck1name, this.deck2name,
-                    this.deck3name, this.ndockNotice, this.ndock1name, this.ndock2name, this.ndock3name,
-                    this.ndock4name, this.consoleComposite);
-            this.dispsize.setSelection(true);
+            ApplicationMain.this.hide(true, this.getSwitchControls());
+            dispsize.setSelection(true);
             this.shell.pack();
             this.shell.setRedraw(true);
         }
 
         // 縮小表示チェック時の動作
-        this.dispsize.addSelectionListener(new SelectionAdapter() {
+        dispsize.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
                 Shell shell = ApplicationMain.this.shell;
                 shell.setRedraw(false);
-                boolean minimum = ApplicationMain.this.dispsize.getSelection();
+                boolean minimum = dispsize.getSelection();
                 // コントロールを隠す
-                ApplicationMain.this.hide(minimum, ApplicationMain.this.commandComposite,
-                        ApplicationMain.this.deckNotice, ApplicationMain.this.deck1name,
-                        ApplicationMain.this.deck2name, ApplicationMain.this.deck3name,
-                        ApplicationMain.this.ndockNotice, ApplicationMain.this.ndock1name,
-                        ApplicationMain.this.ndock2name, ApplicationMain.this.ndock3name,
-                        ApplicationMain.this.ndock4name, ApplicationMain.this.consoleComposite);
+                ApplicationMain.this.hide(minimum, ApplicationMain.this.getSwitchControls());
 
                 // タブを整理する
                 ApplicationMain.this.tabFolder.setSelection(0);
@@ -920,15 +1036,17 @@ public final class ApplicationMain extends WindowBase {
                     }
                 }
 
-                shell.setRedraw(true);
                 // ウインドウサイズを調節
                 if (minimum) {
+                    // ウィンドウのサイズを記憶
+                    ApplicationMain.this.save();
+
                     ApplicationMain.this.tabFolder.setSingle(true);
                     CTabItem[] tabitems = ApplicationMain.this.tabFolder.getItems();
                     for (CTabItem tabitem : tabitems) {
                         Control control = tabitem.getControl();
                         if (control instanceof FleetComposite) {
-                            ApplicationMain.this.hide(true, control);
+                            LayoutLogic.hide(control, true);
                         }
                     }
 
@@ -938,12 +1056,14 @@ public final class ApplicationMain extends WindowBase {
                     for (CTabItem tabitem : tabitems) {
                         Control control = tabitem.getControl();
                         if (control instanceof FleetComposite) {
-                            ApplicationMain.this.hide(false, control);
+                            LayoutLogic.hide(control, false);
                         }
                     }
                 } else {
                     shell.setSize(ApplicationMain.this.getRestoreSize());
                 }
+                shell.setRedraw(true);
+
                 // 設定を保存
                 AppConfig.get().setMinimumLayout(minimum);
             }
@@ -952,9 +1072,10 @@ public final class ApplicationMain extends WindowBase {
         // 選択する項目はドラックで移動できないようにする
         for (Control c : new Control[] { this.commandComposite,
                 this.deckNotice, this.ndockNotice,
-                this.deck1time, this.deck2time,
-                this.deck3time, this.ndock1time, this.ndock2time, this.ndock3time, this.ndock4time,
-                this.consoleComposite }) {
+                this.deck1time, this.deck2time, this.deck3time, this.deck4time,
+                this.ndock1time, this.ndock2time, this.ndock3time, this.ndock4time,
+                this.condTimerTime,
+                this.console }) {
             c.setData("disable-drag-move", true);
         }
         this.tabFolder.setData("disable-drag-move-this", true);
@@ -983,6 +1104,42 @@ public final class ApplicationMain extends WindowBase {
 
         this.startThread();
         this.updateCheck();
+    }
+
+    private void bindControlToMenuItem(final Control control, final MenuItem menu, String name) {
+        try {
+            Method isEnabled = AppConfigBean.class.getMethod("is" + name);
+            final Method setEnabled = AppConfigBean.class.getMethod("set" + name, boolean.class);
+            boolean enabled = (Boolean) isEnabled.invoke(AppConfig.get());
+            menu.setSelection(enabled);
+            // 初期設定
+            if (!enabled) {
+                ApplicationMain.this.hide(true, new Control[] { control });
+            }
+            menu.addSelectionListener(new SelectionAdapter() {
+                @Override
+                public void widgetSelected(SelectionEvent e) {
+                    boolean show = menu.getSelection();
+
+                    // コントロールを隠す
+                    Shell shell = ApplicationMain.this.shell;
+                    shell.setRedraw(false);
+                    ApplicationMain.this.hide(!show, new Control[] { control });
+                    ApplicationMain.this.mainComposite.layout();
+                    shell.setRedraw(true);
+
+                    // 設定を保存
+                    try {
+                        setEnabled.invoke(AppConfig.get(), show);
+                    } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e1) {
+                        throw new RuntimeException(e1);
+                    }
+                }
+            });
+        } catch (NoSuchMethodException | SecurityException | IllegalAccessException | IllegalArgumentException
+                | InvocationTargetException e2) {
+            throw new RuntimeException(e2);
+        }
     }
 
     private void shortcutKeyPushed(int keyCode) {
@@ -1085,7 +1242,7 @@ public final class ApplicationMain extends WindowBase {
         }
     }
 
-    private void saveWindows() {
+    public void saveWindows() {
         this.save();
         for (WindowBase window : this.getWindowList()) {
             window.save();
@@ -1119,6 +1276,17 @@ public final class ApplicationMain extends WindowBase {
         }
     }
 
+    private Control[] getSwitchControls() {
+        Control[] controls = new Control[0];
+        return ArrayUtils.addAll(controls,
+                this.commandComposite,
+                this.deck1name, this.deck2name,
+                this.deck3name, this.deck4name,
+                this.ndock1name, this.ndock2name,
+                this.ndock3name, this.ndock4name,
+                this.console);
+    }
+
     public WindowBase[] getWindowList() {
         return new WindowBase[] {
                 this.captureWindow,
@@ -1142,6 +1310,10 @@ public final class ApplicationMain extends WindowBase {
                 this.shipFilterGroupWindow,
                 this.resourceChartWindow,
                 this.battleCounterWindow,
+                this.fleetWindows[0],
+                this.fleetWindows[1],
+                this.fleetWindows[2],
+                this.fleetWindows[3],
                 this.launcherWindow
         };
     }
@@ -1169,7 +1341,7 @@ public final class ApplicationMain extends WindowBase {
      * @param minimum
      * @param controls 隠すコントロール
      */
-    private void hide(boolean minimum, Control... controls) {
+    private void hide(boolean minimum, Control[] controls) {
         for (Control control : controls) {
             LayoutLogic.hide(control, minimum);
         }
@@ -1181,7 +1353,9 @@ public final class ApplicationMain extends WindowBase {
      */
     private void startThread() {
         // 時間のかかる初期化を別スレッドで実行
-        new BackgroundInitializer(this.shell).start();
+        Thread backgroundInitializer = new BackgroundInitializer(this.shell);
+        backgroundInitializer.setDaemon(true);
+        backgroundInitializer.start();
 
         sysPrint("その他のスレッド起動...");
         // 非同期で画面を更新するスレッド
@@ -1243,7 +1417,7 @@ public final class ApplicationMain extends WindowBase {
                                 try {
                                     Desktop.getDesktop().browse(AppConstants.HOME_PAGE_URI);
                                 } catch (Exception e) {
-                                    LOG.warn("ウェブサイトに移動が失敗しました", e);
+                                    LOG.get().warn("ウェブサイトに移動が失敗しました", e);
                                 }
                             }
                         }
@@ -1256,7 +1430,7 @@ public final class ApplicationMain extends WindowBase {
                 // チェックしなくてもいい設定の場合はエラーを無視する
                 if (AppConfig.get().isUpdateCheck()) {
                     // アップデートチェック失敗はクラス名のみ
-                    LOG.info(e.getClass().getName() + "が原因でアップデートチェックに失敗しました");
+                    LOG.get().info(e.getClass().getName() + "が原因でアップデートチェックに失敗しました");
                 }
             }
         }).start();
@@ -1298,6 +1472,101 @@ public final class ApplicationMain extends WindowBase {
             this.trayItem.setText(newText);
             this.titleText = newText;
         }
+    }
+
+    /** キャプチャ */
+    public CaptureDialog getCaptureDialog() {
+        return this.captureWindow;
+    }
+
+    /** ドロップ報告書 */
+    public DropReportTable getDropTable() {
+        return this.dropReportWindow;
+    }
+
+    /** 建造報告書 */
+    public CreateShipReportTable getCreateShipReportTable() {
+        return this.createShipReportWindow;
+    }
+
+    /** 開発報告書 */
+    public CreateItemReportTable getCreateItemReportTable() {
+        return this.createItemReportWindow;
+    }
+
+    /** 遠征報告書 */
+    public MissionResultTable getMissionResultTable() {
+        return this.missionResultWindow;
+    }
+
+    /** 所有装備一覧 */
+    public ItemTable getItemTable() {
+        return this.itemTableWindow;
+    }
+
+    /** 艦娘一覧1-4 */
+    public ShipTable[] getShipTables() {
+        return this.shipTableWindows;
+    }
+
+    /** お風呂に入りたい艦娘 */
+    public BathwaterTableDialog getBathwaterTableDialog() {
+        return this.bathwaterTablwWindow;
+    }
+
+    /** 遠征一覧 */
+    public MissionTable getMissionTable() {
+        return this.missionTableWindow;
+    }
+
+    /** 任務一覧 */
+    public QuestTable getQuestTable() {
+        return this.questTableWindow;
+    }
+
+    /** 戦況 */
+    public BattleWindowLarge getBattleWindowLarge() {
+        return this.battleWindowLarge;
+    }
+
+    /** 戦況-横 */
+    public BattleWindowSmall getBattleWindowSmall() {
+        return this.battleWindowSmall;
+    }
+
+    /** 自軍敵軍パラメータ */
+    public BattleShipWindow getBattleShipWindow() {
+        return this.battleShipWindow;
+    }
+
+    /** 経験値計算 */
+    public CalcExpDialog getCalcExpDialog() {
+        return this.calcExpWindow;
+    }
+
+    /** 演習経験値計算 */
+    public CalcPracticeExpDialog getCalcPracticeExpDialog() {
+        return this.calcPracticeExpWindow;
+    }
+
+    /** 出撃統計 */
+    public BattleAggDialog getBattleAggDialog() {
+        return this.battleCounterWindow;
+    }
+
+    /** グループエディター */
+    public ShipFilterGroupDialog getShipFilterGroupDialog() {
+        return this.shipFilterGroupWindow;
+    }
+
+    /** 資材チャート */
+    public ResourceChartDialog getResourceChartDialog() {
+        return this.resourceChartWindow;
+    }
+
+    /** ツールウィンドウ */
+    public LauncherWindow getLauncherWindow() {
+        return this.launcherWindow;
     }
 
     /**
@@ -1343,17 +1612,38 @@ public final class ApplicationMain extends WindowBase {
     }
 
     /**
-     * @return 遠征グループ
-     */
-    public Group getDeckGroup() {
-        return this.deckGroup;
-    }
-
-    /**
      * @return 1分前に通知する(遠征)
      */
     public Button getDeckNotice() {
         return this.deckNotice;
+    }
+
+    /**
+     * @return 1分前に通知する(入渠)
+     */
+    public Button getNdockNotice() {
+        return this.ndockNotice;
+    }
+
+    /**
+     * @return akashiNotice
+     */
+    public Button getAkashiNotice() {
+        return this.akashiNotice;
+    }
+
+    /**
+     * @return condNotice
+     */
+    public Button getCondNotice() {
+        return this.condNotice;
+    }
+
+    /**
+     * @return 遠征グループ
+     */
+    public Group getDeckGroup() {
+        return this.deckGroup;
     }
 
     /**
@@ -1399,17 +1689,24 @@ public final class ApplicationMain extends WindowBase {
     }
 
     /**
+     * @return 遠征.艦隊4の艦隊名
+     */
+    public Label getDeck4name() {
+        return this.deck4name;
+    }
+
+    /**
+     * @return 遠征.艦隊4の帰投時間
+     */
+    public Text getDeck4time() {
+        return this.deck4time;
+    }
+
+    /**
      * @return 入渠グループ
      */
     public Group getNdockGroup() {
         return this.ndockGroup;
-    }
-
-    /**
-     * @return 1分前に通知する(入渠)
-     */
-    public Button getNdockNotice() {
-        return this.ndockNotice;
     }
 
     /**
@@ -1468,6 +1765,14 @@ public final class ApplicationMain extends WindowBase {
         return this.ndock4time;
     }
 
+    public Label getCondTimerLabel() {
+        return this.condTimerLabel;
+    }
+
+    public Text getCondTimerTime() {
+        return this.condTimerTime;
+    }
+
     /**
      * エラーラベルを取得
      * @return
@@ -1477,17 +1782,11 @@ public final class ApplicationMain extends WindowBase {
     }
 
     /**
-     * @return コンソールコンポジット
-     */
-    public Composite getConsoleComposite() {
-        return this.consoleComposite;
-    }
-
-    /**
      * コンソールを更新します
      * @param message コンソールに表示するメッセージ
      */
     public void printMessage(final String message) {
+        getUserlogger().get().info(message);
         if (disableUpdate || this.console.isDisposed())
             return;
         int size = this.console.getItemCount();
@@ -1564,5 +1863,19 @@ public final class ApplicationMain extends WindowBase {
 
     public void updateCalcPracticeExp(PracticeUserDetailDto practiceUserExDto) {
         this.calcPracticeExpWindow.updatePracticeUser(practiceUserExDto);
+    }
+
+    /**
+     * @return fleetWindows
+     */
+    public FleetWindow[] getFleetWindows() {
+        return this.fleetWindows;
+    }
+
+    /**
+     * @return userlogger
+     */
+    public static LoggerHolder getUserlogger() {
+        return userLogger;
     }
 }

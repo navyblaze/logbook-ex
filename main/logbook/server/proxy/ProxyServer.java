@@ -2,10 +2,9 @@ package logbook.server.proxy;
 
 import logbook.config.AppConfig;
 import logbook.gui.ApplicationMain;
+import logbook.internal.LoggerHolder;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.proxy.ConnectHandler;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Server;
@@ -20,7 +19,7 @@ import org.eclipse.jetty.util.thread.QueuedThreadPool;
  */
 public final class ProxyServer {
 
-    private static final Logger LOG = LogManager.getLogger(ProxyServer.class);
+    private static final LoggerHolder LOG = new LoggerHolder(ProxyServer.class);
 
     private static Server server;
 
@@ -51,11 +50,12 @@ public final class ProxyServer {
             // httpはこっちのハンドラでプロキシ
             ServletContextHandler context = new ServletContextHandler(proxy, "/", ServletContextHandler.SESSIONS);
             ServletHolder proxyServlet = new ServletHolder(new ReverseProxyServlet());
+            proxyServlet.setInitParameter("timeout", "600000");
             context.addServlet(proxyServlet, "/*");
 
             server.start();
         } catch (Exception e) {
-            LOG.fatal("Proxyサーバーの起動に失敗しました", e);
+            LOG.get().fatal("Proxyサーバーの起動に失敗しました", e);
             throw new RuntimeException(e);
         }
     }
@@ -72,7 +72,7 @@ public final class ProxyServer {
                 ApplicationMain.logPrint("プロキシサーバを再起動しました");
             }
         } catch (Exception e) {
-            LOG.fatal("Proxyサーバーの起動に失敗しました", e);
+            LOG.get().fatal("Proxyサーバーの起動に失敗しました", e);
             throw new RuntimeException(e);
         }
     }

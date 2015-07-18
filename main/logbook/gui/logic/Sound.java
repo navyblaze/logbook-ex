@@ -15,10 +15,9 @@ import javax.sound.sampled.SourceDataLine;
 import javax.sound.sampled.UnsupportedAudioFileException;
 
 import logbook.config.AppConfig;
+import logbook.internal.LoggerHolder;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 /**
  * サウンドを操作します
@@ -30,7 +29,7 @@ public final class Sound {
     private static ArrayBlockingQueue<File> soundfileQueue = new ArrayBlockingQueue<File>(10);
 
     /** ロガー */
-    private static final Logger LOG = LogManager.getLogger(Sound.class);
+    private static final LoggerHolder LOG = new LoggerHolder(Sound.class);
 
     /** バッファーサイズ */
     private static final int BUFFER_SIZE = 1024 * 8;
@@ -92,9 +91,9 @@ public final class Sound {
                 audioInputStream.close();
             }
         } catch (UnsupportedAudioFileException e) {
-            LOG.warn("サポートされていないサウンドファイル形式です", file);
+            LOG.get().warn("サポートされていないサウンドファイル形式です", file);
         } catch (Exception e) {
-            LOG.warn("サウンドの再生に失敗しました", e);
+            LOG.get().warn("サウンドの再生に失敗しました", e);
         }
     }
 
@@ -123,6 +122,22 @@ public final class Sound {
      */
     public static void randomDockSoundPlay() {
         randomPlay(getFileList("./sound/dock"));
+    }
+
+    /**
+     * 泊地修理した時に再生するサウンドを再生します
+     * 
+     */
+    public static void randomAkashiSoundPlay() {
+        randomPlay(getFileList("./sound/akashi"));
+    }
+
+    /**
+     * 疲労が回復した時に再生するサウンドを再生します
+     * 
+     */
+    public static void randomCondSoundPlay() {
+        randomPlay(getFileList("./sound/condition"));
     }
 
     /**
@@ -167,7 +182,7 @@ public final class Sound {
     public static class PlayerThread extends Thread {
 
         /** ロガー */
-        private static final Logger LOG = LogManager.getLogger(PlayerThread.class);
+        private static final LoggerHolder LOG = new LoggerHolder(PlayerThread.class);
 
         /**
          * プレイヤースレッド
@@ -187,7 +202,7 @@ public final class Sound {
                     //Thread.sleep(500);
                 }
             } catch (Exception e) {
-                LOG.fatal("スレッドが異常終了しました", e);
+                LOG.get().fatal("スレッドが異常終了しました", e);
                 throw new RuntimeException(e);
             }
         }

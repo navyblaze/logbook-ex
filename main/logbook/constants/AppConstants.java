@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.TimeZone;
 import java.util.TreeMap;
 
+import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.RGB;
 
 /**
@@ -23,14 +24,14 @@ public class AppConstants {
     public static final String SUFFIX = "拡張版";
 
     /** バージョン */
-    public static final String VERSION = "1.6.5";
+    public static final String VERSION = "1.9.1";
 
     /** ホームページ */
     public static final URI HOME_PAGE_URI = URI.create("http://nekopanda.blog.jp/");
 
     /** アップデートチェック先 */
     public static final URI UPDATE_CHECK_URI = URI
-            .create("https://googledrive.com/host/0B83tioTzFacPdnlSRW5vcEVFUFk/okversions.txt");
+            .create("http://nekopandanet.sakura.ne.jp/logbook/version/okversions.txt");
 
     /** 日付書式 */
     public static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
@@ -106,19 +107,29 @@ public class AppConstants {
             0
     };
 
-    public static final RGB[] CHART_COLOR_TABLE = new RGB[] {
-            new RGB(0x00, 0x80, 0x00), // 燃料
-            new RGB(0x66, 0x33, 0x00), // 弾薬
-            new RGB(0x80, 0x80, 0x80), // 鋼材
-            new RGB(0xCC, 0x33, 0x00), // ボーキ
-            new RGB(0xA5, 0x2A, 0x2A), // バーナー
-            new RGB(0xF0, 0x80, 0x80), // バケツ
-            new RGB(0x48, 0x76, 0xFF), // 開発
-            new RGB(0x00, 0xAB, 0xB2) // ネジ
+    public static final RGB[][] CHART_COLOR_TABLE = new RGB[][] {
+            new RGB[] { new RGB(0x00, 0x80, 0x00), new RGB(213, 94, 0) }, // 燃料 赤
+            new RGB[] { new RGB(0x66, 0x33, 0x00), new RGB(0, 0, 0) }, // 弾薬 黒
+            new RGB[] { new RGB(0x80, 0x80, 0x80), new RGB(0, 114, 178) }, // 鋼材  青
+            new RGB[] { new RGB(0xCC, 0x33, 0x00), new RGB(86, 180, 233) }, // ボーキ 水色
+            new RGB[] { new RGB(0xA5, 0x2A, 0x2A), new RGB(240, 228, 66) }, // バーナー 黄色
+            new RGB[] { new RGB(0xF0, 0x80, 0x80), new RGB(230, 159, 0) }, // バケツ　オレンジ
+            new RGB[] { new RGB(0x48, 0x76, 0xFF), new RGB(0, 158, 115) }, // 開発 緑
+            new RGB[] { new RGB(0x00, 0xAB, 0xB2), new RGB(204, 121, 167) } // ネジ 紫
     };
 
+    /** 無傷の色 */
+    public static final RGB[] MUKIZU_SHIP_COLOR = new RGB[] { new RGB(149, 255, 165), null };
+
     /** 小破の色 */
-    public static final RGB SYOHA_SHIP_COLOR = new RGB(210, 255, 0);
+    public static final RGB[] SYOHA_SHIP_COLOR = new RGB[] { new RGB(230, 255, 0), new RGB(241, 255, 163) };
+
+    /** 中破の色 */
+    public static final RGB[] TYUHA_SHIP_COLOR = new RGB[] { new RGB(255, 140, 0), new RGB(255, 252, 20) };
+    public static final int[] TYUHA_FORGROUNG_COLOR = new int[] { SWT.COLOR_WHITE, SWT.COLOR_BLACK };
+
+    /** 大破の色 */
+    public static final RGB[] TAIHA_SHIP_COLOR = new RGB[] { new RGB(255, 16, 0), new RGB(213, 94, 0) };
 
     /** 轟沈の色 */
     public static final RGB SUNK_SHIP_COLOR = new RGB(77, 166, 223);
@@ -137,6 +148,15 @@ public class AppConstants {
 
     /** 20分前 */
     public static final RGB TIME_IN_20_MIN = new RGB(255, 247, 203);
+
+    /** 疲労回復1分前 */
+    public static final RGB COND_IN_3_MIN = new RGB(0, 255, 37);
+
+    /** 疲労回復5分前 */
+    public static final RGB COND_WAITING = new RGB(149, 255, 165);
+
+    /** 泊地中理中 */
+    public static final RGB AKASHI_REPAIR_COLOR = new RGB(168, 211, 255);
 
     /** テーブル行(偶数行)背景色 */
     public static final RGB ROW_BACKGROUND = new RGB(246, 246, 246);
@@ -157,7 +177,7 @@ public class AppConstants {
     public static final float EMPTY_SUPPLY = 0.33f;
 
     /** 艦載機装備アイテムのタイプID */
-    public static final int[] PLANE_ITEM_TYPES = new int[] { 6, 7, 8, 9, 10, 11, 25, 26 };
+    public static final int[] PLANE_ITEM_TYPES = new int[] { 6, 7, 8, 9, 10, 11, 25, 26, 41 };
 
     /** 文字コード(Shift_JIS) */
     public static final Charset CHARSET = Charset.forName("MS932");
@@ -165,14 +185,8 @@ public class AppConstants {
     /** アプリケーション設定ファイル  */
     public static final File APP_CONFIG_FILE = new File("./config/internal.xml");
 
-    /** 艦娘設定ファイル  */
-    public static final File SHIP_CONFIG_FILE = new File("./config/ship.xml");
-
-    /** 装備一覧設定ファイル  */
-    public static final File ITEM_CONFIG_FILE = new File("./config/item.xml");
-
-    /** 装備マスター設定ファイル  */
-    public static final File ITEM_MST_CONFIG_FILE = new File("./config/itemmst.xml");
+    /** ユーザーゲームデータファイル  */
+    public static final File USER_DATA_CONFIG = new File("./config/user.xml");
 
     /** マスターゲームデータ保存ファイル  */
     public static final File MASTER_DATA_CONFIG = new File("./config/master.xml");
@@ -184,10 +198,25 @@ public class AppConstants {
     public static final File GROUP_CONFIG_FILE = new File("./config/group.xml");
 
     /** 敵データファイル  */
-    public static final File ENEMY_DATA_FILE = new File("./config/KCRDB-enemyid.csv");
+    public static final File ENEMY_DATA_FILE = new File("./config/EnemyFleetRecord.csv");
+
+    /** 旧敵データファイル  */
+    public static final File ENEMY_DATA_OLD_FILE = new File("./config/KCRDB-enemyid.csv");
+
+    /** 艦パラメータファイル  */
+    public static final File SHIP_PARAMETER_FILE = new File("./config/ShipParameterRecord.csv");
+
+    /** スクリプトデータファイル  */
+    public static final File SCRIPT_DATA_FILE = new File("./config/scriptdata.zip");
 
     /** 出撃ログ表示用CSSファイル */
-    public static final File BATTLE_LOG_CSS_FILE = new File("./templates/battle-log.css");
+    public static final File BATTLE_LOG_CSS_FILE = new File("./config/battle-log.css");
+
+    /** テンプレート */
+    public static final File BATTLE_LOG_CSS_TMPL_FILE = new File("./templates/battle-log.css");
+
+    /** 多重起動検出用 */
+    public static final File LOCK_FILE = new File("./config/lock");
 
     /** 保有資材:燃料 */
     public static final int MATERIAL_FUEL = 1;
@@ -320,6 +349,9 @@ public class AppConstants {
 
     /** メッセージ  大発:{0} (+{1}%) */
     public static final String MESSAGE_TOTAL_DAIHATSU = "大発:{0} (+{1}%)";
+
+    /** メッセージ  前回の遠征:{0} (+{1}%) */
+    public static final String MESSAGE_PREVIOUS_MISSION = "前回の遠征:{0}";
 
     /** タイトルバーに表示するデフォルトテキスト */
     public static final String TITLEBAR_TEXT = NAME + SUFFIX + " " + VERSION;

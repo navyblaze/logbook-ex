@@ -7,16 +7,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Timer;
-import java.util.TimerTask;
 import java.util.TreeMap;
-import java.util.concurrent.TimeUnit;
 
 import logbook.config.AppConfig;
 import logbook.config.bean.TableConfigBean;
-import logbook.data.Data;
-import logbook.data.DataType;
-import logbook.data.EventListener;
-import logbook.data.context.GlobalContext;
 import logbook.dto.BattleAggDetailsDto;
 import logbook.dto.BattleAggUnitDto;
 import logbook.dto.BattleResultDto;
@@ -24,18 +18,17 @@ import logbook.dto.MapCellDto;
 import logbook.dto.ResultRank;
 import logbook.gui.listener.TreeKeyShortcutAdapter;
 import logbook.gui.listener.TreeToClipboardAdapter;
+import logbook.gui.logic.GuiUpdator;
 import logbook.internal.BattleAggDate;
 import logbook.internal.BattleAggUnit;
 import logbook.internal.BattleResultServer;
+import logbook.internal.LoggerHolder;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.FillLayout;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.Menu;
@@ -49,9 +42,9 @@ import org.eclipse.swt.widgets.TreeItem;
  * 出撃統計
  *
  */
-public class BattleAggDialog extends WindowBase implements EventListener {
+public class BattleAggDialog extends WindowBase {
     /** ロガー */
-    private static final Logger LOG = LogManager.getLogger(BattleAggDialog.class);
+    private static final LoggerHolder LOG = new LoggerHolder(BattleAggDialog.class);
 
     /** ヘッダー */
     private final String[] header = this.getTableHeader();
@@ -81,8 +74,6 @@ public class BattleAggDialog extends WindowBase implements EventListener {
     protected TableConfigBean config;
 
     protected MenuItem cyclicReloadMenuItem;
-
-    private Display display;
 
     protected boolean needsUpdate = true;
 
@@ -124,10 +115,9 @@ public class BattleAggDialog extends WindowBase implements EventListener {
         this.shell = this.getShell();
         this.shell.setText(this.getTitle());
         this.shell.setLayout(new FillLayout(SWT.HORIZONTAL));
-        this.display = this.shell.getDisplay();
         // メニューバー
-        this.menubar = new Menu(this.shell, SWT.BAR);
-        this.shell.setMenuBar(this.menubar);
+        this.createMenubar();
+        this.menubar = this.getMenubar();
         // ツリーテーブル
         this.tree = new Tree(this.shell, SWT.BORDER | SWT.FULL_SELECTION | SWT.VIRTUAL | SWT.MULTI);
         this.tree.addKeyListener(new TreeKeyShortcutAdapter(this.header, this.tree));
@@ -135,51 +125,52 @@ public class BattleAggDialog extends WindowBase implements EventListener {
         this.tree.setHeaderVisible(true);
         this.treeItems = new AggTableItems(this.tree);
         // メニューバーのメニュー
-        MenuItem operoot = new MenuItem(this.menubar, SWT.CASCADE);
-        operoot.setText("操作");
-        this.opemenu = new Menu(operoot);
-        operoot.setMenu(this.opemenu);
+        if (this.isNoMenubar()) {
+            this.opemenu = this.menubar;
+        }
+        else {
+            MenuItem operoot = new MenuItem(this.menubar, SWT.CASCADE);
+            operoot.setText("操作");
+            this.opemenu = new Menu(operoot);
+            operoot.setMenu(this.opemenu);
+        }
         MenuItem reload = new MenuItem(this.opemenu, SWT.NONE);
         reload.setText("再読み込み(&R)\tF5");
         reload.setAccelerator(SWT.F5);
         reload.addSelectionListener(new TableReloadAdapter());
-        this.cyclicReloadMenuItem = new MenuItem(this.opemenu, SWT.CHECK);
-        this.cyclicReloadMenuItem.setText("定期的に再読み込み(3秒)(&A)\tCtrl+F5");
-        this.cyclicReloadMenuItem.setAccelerator(SWT.CTRL + SWT.F5);
-        this.cyclicReloadMenuItem.addSelectionListener(new CyclicReloadAdapter(this.cyclicReloadMenuItem));
 
         // ウィンドウの基本メニューを設定
         super.registerEvents();
 
         // テーブル右クリックメニュー
-        this.tablemenu = this.getMenu();
+        this.tablemenu = this.getPopupMenu();
         this.tree.setMenu(this.tablemenu);
         MenuItem sendclipbord = new MenuItem(this.tablemenu, SWT.NONE);
         sendclipbord.addSelectionListener(new TreeToClipboardAdapter(this.header, this.tree));
         sendclipbord.setText("クリップボードにコピー(&C)");
-        MenuItem reloadtable = new MenuItem(this.tablemenu, SWT.NONE);
-        reloadtable.setText("再読み込み(&R)");
-        reloadtable.addSelectionListener(new TableReloadAdapter());
-
-        this.tree.addListener(SWT.Dispose, new Listener() {
-            @Override
-            public void handleEvent(Event event) {
-                // GlobalContextへのリスナ登録解除
-                GlobalContext.removeEventListener(BattleAggDialog.this);
-            }
-        });
-
-        // 更新リスナ登録
-        GlobalContext.addEventListener(this);
-
-        // 自動更新設定を反映
-        if (this.getConfig().isCyclicReload()) {
-            this.cyclicReloadMenuItem.setSelection(true);
-            this.enableCyclicReload();
+        if (!this.isNoMenubar()) {
+            MenuItem reloadtable = new MenuItem(this.tablemenu, SWT.NONE);
+            reloadtable.setText("再読み込み(&R)");
+            reloadtable.addSelectionListener(new TableReloadAdapter());
         }
 
         this.setTableHeader();
         this.reloadTable();
+
+        // データの更新を受け取る
+        final Runnable listener = new GuiUpdator(new Runnable() {
+            @Override
+            public void run() {
+                BattleAggDialog.this.reloadTable();
+            }
+        });
+        BattleResultServer.addListener(listener);
+        this.shell.addListener(SWT.Dispose, new Listener() {
+            @Override
+            public void handleEvent(Event event) {
+                BattleResultServer.removeListener(listener);
+            }
+        });
     }
 
     /**
@@ -318,7 +309,7 @@ public class BattleAggDialog extends WindowBase implements EventListener {
 
         } catch (Exception e) {
             ApplicationMain.main.printMessage("出撃統計作成に失敗しました");
-            LOG.warn("出撃統計作成に失敗", e);
+            LOG.get().warn("出撃統計作成に失敗", e);
         }
         return aggMap;
     }
@@ -516,97 +507,6 @@ public class BattleAggDialog extends WindowBase implements EventListener {
                 this.expanded = this.item.getExpanded();
                 this.item = this.bossItem = null;
             }
-        }
-    }
-
-    private void enableCyclicReload() {
-        // タイマーを作成
-        if (this.timer == null) {
-            this.timer = new Timer(true);
-            // 3秒毎に再読み込みするようにスケジュールする
-            this.timer.schedule(new CyclicReloadTask(BattleAggDialog.this), 0,
-                    TimeUnit.SECONDS.toMillis(3));
-        }
-    }
-
-    private void disableCyclicReload() {
-        // タイマーを終了
-        if (this.timer != null) {
-            this.timer.cancel();
-            this.timer = null;
-        }
-    }
-
-    /**
-     * テーブルを定期的に再読み込みする
-     */
-    protected class CyclicReloadAdapter extends SelectionAdapter {
-
-        private final MenuItem menuitem;
-
-        public CyclicReloadAdapter(MenuItem menuitem) {
-            this.menuitem = menuitem;
-        }
-
-        @Override
-        public void widgetSelected(SelectionEvent e) {
-            if (this.menuitem.getSelection()) {
-                BattleAggDialog.this.enableCyclicReload();
-            } else {
-                BattleAggDialog.this.disableCyclicReload();
-            }
-        }
-    }
-
-    /**
-     * テーブルを定期的に再読み込みする
-     */
-    protected static class CyclicReloadTask extends TimerTask {
-
-        private final BattleAggDialog dialog;
-
-        public CyclicReloadTask(BattleAggDialog dialog) {
-            this.dialog = dialog;
-        }
-
-        @Override
-        public void run() {
-            if (!this.dialog.needsUpdate) {
-                // 更新の必要はない
-                return;
-            }
-            this.dialog.display.asyncExec(new Runnable() {
-                @Override
-                public void run() {
-                    if (!CyclicReloadTask.this.dialog.shell.isDisposed()) {
-                        // 見えているときだけ処理する
-                        if (CyclicReloadTask.this.dialog.shell.isVisible()) {
-                            CyclicReloadTask.this.dialog.reloadTable();
-                        }
-                    }
-                    else {
-                        // ウインドウが消えていたらタスクをキャンセルする
-                        CyclicReloadTask.this.cancel();
-                    }
-                }
-            });
-        }
-    }
-
-    /**
-     * データ受信
-     * デフォルト動作はどんなデータでも更新をONにする
-     */
-    @SuppressWarnings("incomplete-switch")
-    @Override
-    public void update(DataType type, Data data) {
-        switch (type) {
-        case BATTLE_RESULT:
-        case COMBINED_BATTLE_RESULT:
-        case PRACTICE_BATTLE_RESULT:
-            //case START:
-            //case NEXT:
-            this.needsUpdate = true;
         }
     }
 }

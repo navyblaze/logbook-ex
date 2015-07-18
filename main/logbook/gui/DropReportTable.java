@@ -20,16 +20,16 @@ import logbook.dto.BattleExDto;
 import logbook.dto.BattleResultDto;
 import logbook.gui.logic.BattleHtmlGenerator;
 import logbook.gui.logic.CreateReportLogic;
+import logbook.gui.logic.GuiUpdator;
 import logbook.gui.logic.TableItemCreator;
 import logbook.gui.logic.TableRowHeader;
 import logbook.internal.BattleResultFilter;
 import logbook.internal.BattleResultServer;
+import logbook.internal.LoggerHolder;
 import logbook.internal.TimeSpanKind;
 import logbook.scripting.TableItemCreatorProxy;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
@@ -37,7 +37,9 @@ import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Point;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.FileDialog;
+import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.MenuItem;
 import org.eclipse.swt.widgets.MessageBox;
 import org.eclipse.swt.widgets.Shell;
@@ -48,7 +50,7 @@ import org.eclipse.swt.widgets.Shell;
  */
 public final class DropReportTable extends AbstractTableDialog {
     /** ロガー */
-    private static final Logger LOG = LogManager.getLogger(DropReportTable.class);
+    private static final LoggerHolder LOG = new LoggerHolder(DropReportTable.class);
 
     private static DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd_HHmmss.SSS");
 
@@ -114,11 +116,13 @@ public final class DropReportTable extends AbstractTableDialog {
                 DropReportTable.this.battleFilterDialog.open();
             }
         };
-        // フィルターメニュー
-        final MenuItem filter = new MenuItem(this.menubar, SWT.PUSH);
-        filter.setText("フィルター");
-        filter.setAccelerator(SWT.CTRL + 'F');
-        filter.addSelectionListener(filterListener);
+        if (!this.isNoMenubar()) {
+            // フィルターメニュー
+            final MenuItem filter = new MenuItem(this.menubar, SWT.PUSH);
+            filter.setText("フィルター");
+            filter.setAccelerator(SWT.CTRL + 'F');
+            filter.addSelectionListener(filterListener);
+        }
         // セパレータ
         new MenuItem(this.tablemenu, SWT.SEPARATOR);
         // 右クリックメニューに追加する
@@ -129,6 +133,21 @@ public final class DropReportTable extends AbstractTableDialog {
         final MenuItem save = new MenuItem(this.tablemenu, SWT.NONE);
         save.setText("選択したログを保存する");
         save.addSelectionListener(new SaveAdapter());
+
+        // データの更新を受け取る
+        final Runnable listener = new GuiUpdator(new Runnable() {
+            @Override
+            public void run() {
+                DropReportTable.this.reloadTable();
+            }
+        });
+        BattleResultServer.addListener(listener);
+        this.shell.addListener(SWT.Dispose, new Listener() {
+            @Override
+            public void handleEvent(Event event) {
+                BattleResultServer.removeListener(listener);
+            }
+        });
     }
 
     private BattleResultDto getItemFromIndex(int index) {
@@ -162,10 +181,10 @@ public final class DropReportTable extends AbstractTableDialog {
             BattleHtmlGenerator gen = new BattleHtmlGenerator();
             return gen.generateHTML(title, item, detail, forFile);
         } catch (IOException e) {
-            LOG.warn("会敵報告作成に失敗: CSSファイル読み込みに失敗しました", e);
+            LOG.get().warn("会敵報告作成に失敗: CSSファイル読み込みに失敗しました", e);
         } catch (Exception e) {
             ApplicationMain.main.printMessage("会敵報告作成に失敗しました");
-            LOG.warn("会敵報告作成に失敗", e);
+            LOG.get().warn("会敵報告作成に失敗", e);
         }
         return null;
     }
@@ -326,14 +345,8 @@ public final class DropReportTable extends AbstractTableDialog {
     /**
      * 更新する必要のあるデータ
      */
-    @SuppressWarnings("incomplete-switch")
     @Override
     public void update(DataType type, Data data) {
-        switch (type) {
-        case BATTLE_RESULT:
-        case COMBINED_BATTLE_RESULT:
-        case PRACTICE_BATTLE_RESULT:
-            this.needsUpdate = true;
-        }
+        // BattleResultServerから直接更新を受け取るので何もしない
     }
 }

@@ -10,6 +10,7 @@ import java.util.List;
 
 import logbook.constants.AppConstants;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 
 /**
@@ -23,6 +24,17 @@ public class HTMLGenerator {
 
     private static String TAB = "    ";
 
+    static {
+        if (AppConstants.BATTLE_LOG_CSS_FILE.exists() == false) {
+            // CSSファイルが存在しない場合はtemplatesからコピー
+            try {
+                FileUtils.copyFile(AppConstants.BATTLE_LOG_CSS_TMPL_FILE, AppConstants.BATTLE_LOG_CSS_FILE);
+            } catch (IOException e) {
+                //
+            }
+        }
+    }
+
     public void genHeader(String title, boolean genCharset) throws IOException {
         this.sb.append("<!DOCTYPE html>").append("\r\n");
         this.sb.append("<html>").append("\r\n");
@@ -33,7 +45,7 @@ public class HTMLGenerator {
         this.sb.append("<title>").append(title).append("</title>").append("\r\n");
         this.sb.append("<style type=\"text/css\">").append("\r\n");
         if (AppConstants.BATTLE_LOG_CSS_FILE.exists()) {
-            String css = IOUtils.toString(new FileInputStream(AppConstants.BATTLE_LOG_CSS_FILE));
+            String css = IOUtils.toString(new FileInputStream(AppConstants.BATTLE_LOG_CSS_FILE), "UTF-8");
             this.sb.append(css);
         }
         this.sb.append("</style>").append("\r\n");

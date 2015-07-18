@@ -19,6 +19,8 @@ public enum DataType {
     SHIP2("/kcsapi/api_get_member/ship2"),
     /** 保有艦 */
     SHIP3("/kcsapi/api_get_member/ship3"),
+    /** 出撃中の更新 */
+    SHIP_DECK("/kcsapi/api_get_member/ship_deck"),
     /** 遠征(帰還) */
     MISSION_RESULT("/kcsapi/api_req_mission/result"),
     /** 基本 */
@@ -39,6 +41,8 @@ public enum DataType {
     BATTLE_SP_MIDNIGHT("/kcsapi/api_req_battle_midnight/sp_midnight"),
     /** 戦闘(夜戦→昼戦) */
     BATTLE_NIGHT_TO_DAY("/kcsapi/api_req_sortie/night_to_day"),
+    /** 戦闘(航空戦) */
+    AIR_BATTLE("/kcsapi/api_req_sortie/airbattle"),
     /** 戦闘(航空戦) */
     COMBINED_AIR_BATTLE("/kcsapi/api_req_combined_battle/airbattle"),
     /** 戦闘 */
@@ -105,6 +109,10 @@ public enum DataType {
     NYUKYO_START("/kcsapi/api_req_nyukyo/start"),
     /** 高速修復 */
     NYUKYO_SPEEDCHANGE("/kcsapi/api_req_nyukyo/speedchange"),
+    /** 改造 */
+    REMODELING("/kcsapi/api_req_kaisou/remodeling"),
+    /** 疲労度回復アイテム使用 */
+    ITEMUSE_COND("/kcsapi/api_req_member/itemuse_cond"),
     /** フィルタ前のデータ */
     UNDEFINED(null);
 

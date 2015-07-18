@@ -2,11 +2,13 @@ package logbook.internal;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
-import logbook.config.ItemMasterConfig;
 import logbook.dto.ItemInfoDto;
 import logbook.dto.ShipParameters;
 
@@ -388,27 +390,27 @@ public class Item {
     };
 
     // 始めてアクセスがあった時に読み込む
-    public static final boolean INIT_COMPLETE;
     static {
-        ItemMasterConfig.load();
-        INIT_COMPLETE = true;
+        update();
     }
 
     /**
-     * アイテムを設定します
+     * マスターデータから更新
      */
-    public static void set(int id, ItemInfoDto item) {
-        ITEM.put(id, item);
+    public static void update() {
+        for (Entry<Integer, ItemInfoDto> entry : MasterData.get().getStart2().getItems().entrySet()) {
+            ITEM.put(entry.getKey(), entry.getValue());
+        }
     }
 
     /**
      * アイテムを取得します
      * 
-     * @param type ID
+     * @param id ID
      * @return アイテム
      */
-    public static ItemInfoDto get(int type) {
-        return ITEM.get(type);
+    public static ItemInfoDto get(int id) {
+        return ITEM.get(id);
     }
 
     /**
@@ -422,6 +424,24 @@ public class Item {
 
     public static Map<Integer, ItemInfoDto> getMap() {
         return ITEM;
+    }
+
+    public static List<ItemInfoDto> fromIdList(int[] slot) {
+        List<ItemInfoDto> items = new ArrayList<ItemInfoDto>();
+        for (int itemid : slot) {
+            if (-1 != itemid) {
+                ItemInfoDto item = ITEM.get(itemid);
+                if (item != null) {
+                    items.add(item);
+                } else {
+                    items.add(Item.UNKNOWN);
+                }
+            }
+            else {
+                items.add(null);
+            }
+        }
+        return items;
     }
 
     public static void dumpCSV(OutputStreamWriter fw) throws IOException {

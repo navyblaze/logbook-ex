@@ -22,10 +22,9 @@ import logbook.gui.listener.TableKeyShortcutAdapter;
 import logbook.gui.listener.TableToClipboardAdapter;
 import logbook.gui.listener.TableToCsvSaveAdapter;
 import logbook.gui.logic.TableItemCreator;
+import logbook.internal.LoggerHolder;
 
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.MenuAdapter;
 import org.eclipse.swt.events.MenuEvent;
@@ -52,7 +51,7 @@ import org.eclipse.swt.widgets.TableColumn;
  */
 public abstract class AbstractTableDialog extends WindowBase implements EventListener {
     /** ロガー */
-    private static final Logger LOG = LogManager.getLogger(AbstractTableDialog.class);
+    private static final LoggerHolder LOG = new LoggerHolder(AbstractTableDialog.class);
 
     private static int MAX_PRINT_ITEMS = 2000;
 
@@ -130,8 +129,8 @@ public abstract class AbstractTableDialog extends WindowBase implements EventLis
         this.shell = this.getShell();
         this.shell.setLayout(new FillLayout());
         // メニューバー
-        this.menubar = new Menu(this.shell, SWT.BAR);
-        this.shell.setMenuBar(this.menubar);
+        this.createMenubar();
+        this.menubar = this.getMenubar();
         // テーブルより前に作成する必要があるコンポジットを作成
         this.createContentsBefore();
         // ヘッダ
@@ -157,10 +156,15 @@ public abstract class AbstractTableDialog extends WindowBase implements EventLis
             }
         });
         // メニューバーのメニュー
-        MenuItem fileroot = new MenuItem(this.menubar, SWT.CASCADE);
-        fileroot.setText("ファイル");
-        this.filemenu = new Menu(fileroot);
-        fileroot.setMenu(this.filemenu);
+        if (this.isNoMenubar()) {
+            this.filemenu = this.menubar;
+        }
+        else {
+            MenuItem fileroot = new MenuItem(this.menubar, SWT.CASCADE);
+            fileroot.setText("ファイル");
+            this.filemenu = new Menu(fileroot);
+            fileroot.setMenu(this.filemenu);
+        }
 
         MenuItem savecsv = new MenuItem(this.filemenu, SWT.NONE);
         savecsv.setText("CSVファイルに保存(&S)\tCtrl+S");
@@ -168,10 +172,19 @@ public abstract class AbstractTableDialog extends WindowBase implements EventLis
         savecsv.addSelectionListener(new TableToCsvSaveAdapter(this.shell, this.getTitle(), this.getTableHeader(),
                 this.table));
 
-        MenuItem operoot = new MenuItem(this.menubar, SWT.CASCADE);
-        operoot.setText("操作");
-        this.opemenu = new Menu(operoot);
-        operoot.setMenu(this.opemenu);
+        if (this.isNoMenubar()) {
+            this.opemenu = this.menubar;
+        }
+        else {
+            MenuItem operoot = new MenuItem(this.menubar, SWT.CASCADE);
+            operoot.setText("操作");
+            this.opemenu = new Menu(operoot);
+            operoot.setMenu(this.opemenu);
+        }
+
+        if (this.opemenu.getItemCount() > 0) {
+            new MenuItem(this.opemenu, SWT.SEPARATOR);
+        }
 
         MenuItem reload = new MenuItem(this.opemenu, SWT.NONE);
         reload.setText("再読み込み(&R)\tF5");
@@ -179,7 +192,7 @@ public abstract class AbstractTableDialog extends WindowBase implements EventLis
         reload.addSelectionListener(new TableReloadAdapter());
 
         this.cyclicReloadMenuItem = new MenuItem(this.opemenu, SWT.CHECK);
-        this.cyclicReloadMenuItem.setText("定期的に再読み込み(3秒)(&A)\tCtrl+F5");
+        this.cyclicReloadMenuItem.setText("定期的に再読み込み(1秒)(&A)\tCtrl+F5");
         this.cyclicReloadMenuItem.setAccelerator(SWT.CTRL + SWT.F5);
         this.cyclicReloadMenuItem.addSelectionListener(new CyclicReloadAdapter(this.cyclicReloadMenuItem));
 
@@ -225,18 +238,22 @@ public abstract class AbstractTableDialog extends WindowBase implements EventLis
         // ウィンドウの基本メニューを設定
         super.registerEvents();
 
-        new MenuItem(this.opemenu, SWT.SEPARATOR);
-
         // テーブル右クリックメニュー
-        this.tablemenu = this.getMenu();
+        this.tablemenu = this.getPopupMenu();
         this.table.setMenu(this.tablemenu);
-        new MenuItem(this.tablemenu, SWT.SEPARATOR);
+        if (this.tablemenu.getItemCount() > 0) {
+            new MenuItem(this.tablemenu, SWT.SEPARATOR);
+        }
         MenuItem sendclipbord = new MenuItem(this.tablemenu, SWT.NONE);
         sendclipbord.addSelectionListener(new TableToClipboardAdapter(this.header, this.table));
         sendclipbord.setText("クリップボードにコピー(&C)");
-        MenuItem reloadtable = new MenuItem(this.tablemenu, SWT.NONE);
-        reloadtable.setText("再読み込み(&R)");
-        reloadtable.addSelectionListener(new TableReloadAdapter());
+
+        if (!this.isNoMenubar()) {
+            MenuItem reloadtable = new MenuItem(this.tablemenu, SWT.NONE);
+            reloadtable.setText("再読み込み(&R)");
+            reloadtable.addSelectionListener(new TableReloadAdapter());
+        }
+
         // テーブルにヘッダーをセット
         this.setTableHeader();
         try {
@@ -245,7 +262,7 @@ public abstract class AbstractTableDialog extends WindowBase implements EventLis
         } catch (Exception e) {
             // データの読み取りでエラーが発生するかもしれないので落ちないようにしておく
             this.body = new ArrayList<>();
-            LOG.warn("テーブルの内容生成でエラー", e);
+            LOG.get().warn("テーブルの内容生成でエラー", e);
         }
         this.sortBody();
         this.setTableBody();
@@ -351,7 +368,7 @@ public abstract class AbstractTableDialog extends WindowBase implements EventLis
         } catch (Exception e) {
             // データの読み取りでエラーが発生するかもしれないので落ちないようにしておく
             this.body = new ArrayList<>();
-            LOG.warn("テーブルの内容生成でエラー", e);
+            LOG.get().warn("テーブルの内容生成でエラー", e);
         }
         //ApplicationMain.timeLogPrint("[E] updateTableBody");
         this.sortBody();
@@ -848,9 +865,9 @@ public abstract class AbstractTableDialog extends WindowBase implements EventLis
         // タイマーを作成
         if (this.timer == null) {
             this.timer = new Timer(true);
-            // 3秒毎に再読み込みするようにスケジュールする
+            // 1秒毎に再読み込みするようにスケジュールする
             this.timer.schedule(new CyclicReloadTask(AbstractTableDialog.this), 0,
-                    TimeUnit.SECONDS.toMillis(3));
+                    TimeUnit.SECONDS.toMillis(1));
         }
     }
 
@@ -868,6 +885,13 @@ public abstract class AbstractTableDialog extends WindowBase implements EventLis
      */
     @Override
     public void update(DataType type, Data data) {
+        this.needsUpdate = true;
+    }
+
+    /**
+     * 次の更新タイミングでテーブルを更新します
+     */
+    public void update() {
         this.needsUpdate = true;
     }
 

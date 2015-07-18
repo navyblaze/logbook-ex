@@ -1,13 +1,15 @@
 package logbook.dto;
 
-import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 
 import javax.json.JsonObject;
 
+import logbook.config.AppConfig;
 import logbook.constants.AppConstants;
 import logbook.data.context.GlobalContext;
+import logbook.internal.CondTiming;
 import logbook.internal.ExpTable;
 import logbook.internal.Ship;
 import logbook.util.JsonUtils;
@@ -19,12 +21,6 @@ import com.dyuproject.protostuff.Tag;
  *
  */
 public final class ShipDto extends ShipBaseDto implements Comparable<ShipDto> {
-
-    /** 日時 */
-    private transient final Calendar time = Calendar.getInstance();
-
-    /** 日時 */
-    private transient final Calendar condClearTime = Calendar.getInstance();
 
     /** 艦娘個人を識別するID */
     @Tag(10)
@@ -98,13 +94,10 @@ public final class ShipDto extends ShipBaseDto implements Comparable<ShipDto> {
 
     /** 艦載機の搭載数 */
     @Tag(27)
-    private final int[] onslot;
+    private int[] onslot;
 
     @Tag(40)
     private final String json;
-
-    /** */
-    private transient final int lockedEquip;
 
     /**
      * コンストラクター
@@ -117,13 +110,7 @@ public final class ShipDto extends ShipBaseDto implements Comparable<ShipDto> {
         this.id = object.getJsonNumber("api_id").intValue();
         this.locked = object.getJsonNumber("api_locked").intValue() == 1;
 
-        int charId = this.getShipId();
-        int afterShipId = this.getShipInfo().getAftershipid();
-        while (afterShipId != 0) {
-            charId = afterShipId;
-            afterShipId = Ship.get(String.valueOf(afterShipId)).getAftershipid();
-        }
-        this.charId = charId;
+        this.charId = Ship.getCharId(this.getShipInfo());
         this.sortno = object.getInt("api_sortno");
 
         this.lv = object.getJsonNumber("api_lv").intValue();
@@ -142,12 +129,45 @@ public final class ShipDto extends ShipBaseDto implements Comparable<ShipDto> {
         this.maxhp = this.getMax().getHP();
         this.slotnum = object.getJsonNumber("api_slotnum").intValue();
         this.onslot = JsonUtils.getIntArray(object, "api_onslot");
-        this.lockedEquip = object.getJsonNumber("api_locked_equip").intValue();
-        // 疲労が抜ける時間を計算する
-        if (this.cond < 49) {
-            this.condClearTime.add(Calendar.MINUTE, Math.max(49 - this.cond, 3));
-        }
         this.json = object.toString();
+    }
+
+    /** 新規入手艦 */
+    public ShipDto(int id, ShipInfoDto shipinfo, int[] slot) {
+        super(shipinfo, slot, true);
+
+        this.id = id;
+        this.locked = false;
+        this.charId = Ship.getCharId(shipinfo);
+        this.sortno = this.getShipInfo().getSortNo();
+
+        this.lv = 1;
+        this.cond = 40;
+
+        this.docktime = 0;
+        this.dockfuel = 0;
+        this.dockmetal = 0;
+
+        this.bull = shipinfo.getMaxBull();
+        this.fuel = shipinfo.getMaxFuel();
+
+        this.exp = 0;
+        this.expraito = 0;
+        this.nowhp = this.maxhp = this.getParam().getHP();
+
+        this.slotnum = shipinfo.getSlotNum();
+        this.onslot = new int[] { 0, 0, 0, 0, 0 };
+
+        List<ItemDto> items = this.getItem2();
+        int[] maxeq = shipinfo.getMaxeq();
+        for (int i = 0; i < items.size(); ++i) {
+            ItemDto item = items.get(i);
+            if ((item != null) && item.isPlane()) {
+                this.onslot[i] = maxeq[i];
+            }
+        }
+
+        this.json = null;
     }
 
     /**
@@ -248,11 +268,10 @@ public final class ShipDto extends ShipBaseDto implements Comparable<ShipDto> {
      * 現在の疲労推定値（下限値）
      * @return 現在の疲労推定値（下限値）
      */
-    public int getEstimatedCond() {
+    public int getEstimatedCond(CondTiming timer) {
         if (this.cond >= 49)
             return this.cond;
-        long elapsedTime = new Date().getTime() - this.time.getTime().getTime();
-        int estimatedCond = (int) (this.cond + ((elapsedTime / (3 * 60 * 1000)) * 3));
+        int estimatedCond = this.cond + (timer.calcPastCycles() * 3);
         if (estimatedCond > 49)
             return 49;
         return estimatedCond;
@@ -264,6 +283,14 @@ public final class ShipDto extends ShipBaseDto implements Comparable<ShipDto> {
      */
     public long getDocktime() {
         return this.docktime;
+    }
+
+    /**
+     * 泊地修理による修理時間
+     * @return
+     */
+    public long getAkashiTime() {
+        return this.docktime + (30 * 1000); // 最大30秒の遅延
     }
 
     /**
@@ -389,8 +416,19 @@ public final class ShipDto extends ShipBaseDto implements Comparable<ShipDto> {
      * 疲労が抜けるまでの時間
      * @return 疲労が抜けるまでの時間
      */
-    public Calendar getCondClearTime() {
-        return this.condClearTime;
+    public Date getCondClearTime(CondTiming timer, int okCond) {
+        if (this.cond >= okCond) {
+            return null;
+        }
+        return timer.calcCondClearTime(this.cond, okCond);
+    }
+
+    /**
+     * 疲労が抜けるまでの時間
+     * @return 疲労が抜けるまでの時間
+     */
+    public Date getCondClearTime(CondTiming timer) {
+        return this.getCondClearTime(timer, AppConfig.get().getOkCond());
     }
 
     /**
@@ -423,14 +461,6 @@ public final class ShipDto extends ShipBaseDto implements Comparable<ShipDto> {
      */
     public boolean isSlightDamage() {
         return ((float) this.nowhp / (float) this.maxhp) <= AppConstants.SLIGHT_DAMAGE;
-    }
-
-    /**
-     * lockedEquipを取得します。
-     * @return lockedEquip
-     */
-    public int getLockedEquip() {
-        return this.lockedEquip;
     }
 
     @Override
@@ -528,6 +558,16 @@ public final class ShipDto extends ShipBaseDto implements Comparable<ShipDto> {
      * @return json
      */
     public JsonObject getJson() {
+        if (this.json == null)
+            return null;
+
         return JsonUtils.fromString(this.json);
+    }
+
+    /**
+     * @param onslot2
+     */
+    public void setOnslot(int[] onslot) {
+        this.onslot = onslot;
     }
 }
