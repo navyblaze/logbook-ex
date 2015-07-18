@@ -1883,7 +1883,7 @@ public final class GlobalContext {
 
     /**
      * 保有資材を更新する
-     *
+     * 記録にBasic情報を使うので更新してから呼び出すこと
      * @param apidata
      */
     private static void doMaterialSub(JsonArray apidata) {
@@ -1930,7 +1930,7 @@ public final class GlobalContext {
         if ((materialLogLastUpdate == null)
                 || (TimeUnit.MILLISECONDS.toSeconds(time.getTime() - materialLogLastUpdate.getTime()) >
                 AppConfig.get().getMaterialLogInterval())) {
-            CreateReportLogic.storeMaterialReport(material);
+            CreateReportLogic.storeMaterialReport(material, basic);
 
             materialLogLastUpdate = time;
         }
@@ -2526,7 +2526,7 @@ public final class GlobalContext {
             }
             material.setEvent(ev);
             if (AppConfig.get().isMaterialLogDetail()) {
-                CreateReportLogic.storeMaterialReport(material);
+                CreateReportLogic.storeMaterialReport(material, basic);
             }
         }
     }
