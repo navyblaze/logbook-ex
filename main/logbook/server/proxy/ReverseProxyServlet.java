@@ -23,7 +23,6 @@ import org.eclipse.jetty.client.api.Request;
 import org.eclipse.jetty.client.api.Response;
 import org.eclipse.jetty.http.HttpHeader;
 import org.eclipse.jetty.http.HttpVersion;
-import org.eclipse.jetty.proxy.ProxyServlet;
 import org.eclipse.swt.widgets.Display;
 
 /**
