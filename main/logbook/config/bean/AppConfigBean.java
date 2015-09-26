@@ -244,6 +244,9 @@ public final class AppConfigBean {
     /** デフォルト評価 */
     private String defaultEvaluate = "S勝利";
 
+    /** 制空表示形式 */
+    private int seikuMethod = 0;
+
     /** 索敵表示形式 */
     private boolean useRecommendedSakuteki = true;
 
@@ -2086,6 +2089,20 @@ public final class AppConfigBean {
      */
     public void setNoticeCondOnlyMainFleet(boolean noticeCondOnlyMainFleet) {
         this.noticeCondOnlyMainFleet = noticeCondOnlyMainFleet;
+    }
+
+    /**
+     * @return seikuMethod
+     */
+    public int getSeikuMethod() {
+        return this.seikuMethod;
+    }
+
+    /**
+     * @param seikuMethod セットする seikuMethod
+     */
+    public void setSeikuMethod(int seikuMethod) {
+        this.seikuMethod = seikuMethod;
     }
 
 }
