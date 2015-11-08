@@ -1,7 +1,9 @@
 package logbook.config.bean;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import logbook.constants.AppConstants;
@@ -49,7 +51,10 @@ public final class AppConfigBean {
     /** 通知設定を表示 */
     private boolean showNotifySetting = true;
 
-    /** 疲労度タイマー表示 */
+    /** 母港タブの泊地修理タイマー表示 */
+    private boolean showAkashiGlobalTimer = true;
+
+    /** 母港タブの疲労度タイマー表示 */
     private boolean showCondCycleTimer = true;
 
     /** 音量 */
@@ -248,9 +253,6 @@ public final class AppConfigBean {
     private int seikuMethod = 0;
 
     /** 索敵表示形式 */
-    private boolean useRecommendedSakuteki = true;
-
-    /** 索敵表示形式 */
     private int sakutekiMethod = 0;
 
     /** タスクバー通知を使用する */
@@ -371,6 +373,9 @@ public final class AppConfigBean {
     /** TwitterのAccessToken */
     private String twitterToken;
     private String twitterTokenSecret;
+
+    /** ツールウィンドウに表示するボタン設定 */
+    private List<String> toolButtons = new ArrayList<>();
 
     private static RGB cloneRGB(RGB rgb) {
         return new RGB(rgb.red, rgb.green, rgb.blue);
@@ -502,6 +507,20 @@ public final class AppConfigBean {
      */
     public void setMinimumLayout(boolean minimumLayout) {
         this.minimumLayout = minimumLayout;
+    }
+
+    /**
+     * @return showAkashiGlobalTimer
+     */
+    public boolean isShowAkashiGlobalTimer() {
+        return this.showAkashiGlobalTimer;
+    }
+
+    /**
+     * @param showAkashiGlobalTimer セットする showAkashiGlobalTimer
+     */
+    public void setShowAkashiGlobalTimer(boolean showAkashiGlobalTimer) {
+        this.showAkashiGlobalTimer = showAkashiGlobalTimer;
     }
 
     /**
@@ -1393,20 +1412,6 @@ public final class AppConfigBean {
     }
 
     /**
-     * @return useRecommendedSakuteki
-     */
-    public boolean isUseRecommendedSakuteki() {
-        return this.useRecommendedSakuteki;
-    }
-
-    /**
-     * @param useRecommendedSakuteki セットする useRecommendedSakuteki
-     */
-    public void setUseRecommendedSakuteki(boolean useRecommendedSakuteki) {
-        this.useRecommendedSakuteki = useRecommendedSakuteki;
-    }
-
-    /**
      * 索敵値の表示形式を取得します。
      * @return 索敵値の表示形式
      */
@@ -2103,6 +2108,20 @@ public final class AppConfigBean {
      */
     public void setSeikuMethod(int seikuMethod) {
         this.seikuMethod = seikuMethod;
+    }
+
+    /**
+     * @return toolButtons
+     */
+    public List<String> getToolButtons() {
+        return this.toolButtons;
+    }
+
+    /**
+     * @param toolButtons セットする toolButtons
+     */
+    public void setToolButtons(List<String> toolButtons) {
+        this.toolButtons = toolButtons;
     }
 
 }

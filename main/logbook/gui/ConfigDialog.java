@@ -2,7 +2,12 @@ package logbook.gui;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import logbook.config.AppConfig;
 import logbook.constants.AppConstants;
@@ -13,6 +18,8 @@ import logbook.gui.logic.PushNotify;
 import logbook.internal.EvaluateExp;
 import logbook.internal.SeaExp;
 import logbook.util.JIntellitypeWrapper;
+import logbook.util.SwtUtils;
+import logbook.util.SwtUtils.TableDragAndDropListener;
 
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.swt.SWT;
@@ -20,7 +27,6 @@ import org.eclipse.swt.custom.SashForm;
 import org.eclipse.swt.custom.ScrolledComposite;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
-import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
@@ -33,11 +39,15 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Dialog;
 import org.eclipse.swt.widgets.DirectoryDialog;
-import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
+import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Spinner;
+import org.eclipse.swt.widgets.Table;
+import org.eclipse.swt.widgets.TableColumn;
+import org.eclipse.swt.widgets.TableItem;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.Tree;
 import org.eclipse.swt.widgets.TreeItem;
@@ -71,10 +81,18 @@ public final class ConfigDialog extends Dialog {
         this.createContents();
         this.shell.open();
         this.shell.layout();
-        Display display = this.getParent().getDisplay();
-        while (!this.shell.isDisposed()) {
-            if (!display.readAndDispatch()) {
-                display.sleep();
+    }
+
+    /**
+     * ペインを選択
+     * @param paneName
+     */
+    public void selectPane(String paneName) {
+        for (TreeItem item : this.tree.getItems()) {
+            if (item.getText().equals(paneName)) {
+                this.tree.setSelection(item);
+                this.selectPane((Composite) item.getData());
+                break;
             }
         }
     }
@@ -142,6 +160,10 @@ public final class ConfigDialog extends Dialog {
         window.setText("ウィンドウ");
         Composite compositeWindow = new Composite(this.composite, SWT.NONE);
         window.setData(compositeWindow);
+        TreeItem toolWin = new TreeItem(this.tree, SWT.NONE);
+        toolWin.setText("ツール");
+        Composite compositeToolWin = new Composite(this.composite, SWT.NONE);
+        toolWin.setData(compositeToolWin);
         TreeItem development = new TreeItem(this.tree, SWT.NONE);
         development.setText("Development");
         Composite compositeDevelopment = new Composite(this.composite, SWT.NONE);
@@ -485,18 +507,15 @@ public final class ConfigDialog extends Dialog {
         final Combo seikuCombo = new Combo(compositeFleetTab, SWT.READ_ONLY);
         seikuCombo.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false, 2, 1));
         seikuCombo.add("A.艦載機素の制空値");
-        seikuCombo.add("B.熟練度込みの制空推定値");
-        seikuCombo.add("C.熟練度込みの制空推定値(艦載機素の制空値 + 熟練度ボーナス推定値)");
+        seikuCombo.add("B.制空推定値範囲");
+        seikuCombo.add("C.制空推定値範囲(艦載機素の制空値 + 熟練度ボーナス推定値)");
+        seikuCombo.add("D.制空推定値中央");
+        seikuCombo.add("E.制空推定値中央(艦載機素の制空値 + 熟練度ボーナス推定値)");
         seikuCombo.select(AppConfig.get().getSeikuMethod());
 
         Label sakutekiLabel = new Label(compositeFleetTab, SWT.NONE);
         sakutekiLabel.setText("索敵計算式");
         sakutekiLabel.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1));
-
-        final Button useRecommendedSakuteki = new Button(compositeFleetTab, SWT.CHECK);
-        useRecommendedSakuteki.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false, 1, 1));
-        useRecommendedSakuteki.setText("推奨計算式を使用する");
-        useRecommendedSakuteki.setSelection(AppConfig.get().isUseRecommendedSakuteki());
 
         final Combo sakutekiCombo = new Combo(compositeFleetTab, SWT.READ_ONLY);
         sakutekiCombo.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false, 2, 1));
@@ -508,25 +527,6 @@ public final class ConfigDialog extends Dialog {
         sakutekiCombo.add("F.2-5式(旧)(偵察機×2 + 電探 + √(装備込みの艦隊索敵値-偵察機-電探))");
         sakutekiCombo.add("G.装備込みの艦隊索敵値(2-5式(旧))");
         sakutekiCombo.select(AppConfig.get().getSakutekiMethod());
-
-        SelectionListener recommendedSakutekiListener = new SelectionAdapter() {
-            int sakutekiMethod = sakutekiCombo.getSelectionIndex();
-
-            @Override
-            public void widgetSelected(SelectionEvent e) {
-                if (useRecommendedSakuteki.getSelection()) {
-                    this.sakutekiMethod = sakutekiCombo.getSelectionIndex();
-                    sakutekiCombo.select(1);
-                    sakutekiCombo.setEnabled(false);
-                }
-                else {
-                    sakutekiCombo.setEnabled(true);
-                    sakutekiCombo.select(this.sakutekiMethod);
-                }
-            }
-        };
-        recommendedSakutekiListener.widgetSelected(null);
-        useRecommendedSakuteki.addSelectionListener(recommendedSakutekiListener);
 
         Label mainLog = new Label(compositeFleetTab, SWT.NONE);
         mainLog.setText("母港タブのログ");
@@ -1082,6 +1082,29 @@ public final class ConfigDialog extends Dialog {
             }
         });
         TestNotifyKdockBtn.setText("テスト通知(建造)");
+        // ツールウィンドウ
+        compositeToolWin.setLayout(new GridLayout(1, false));
+
+        Group toolWinGroup = new Group(compositeToolWin, SWT.NONE);
+        toolWinGroup.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, false, 1, 1));
+        toolWinGroup.setLayout(new GridLayout(3, false));
+        toolWinGroup.setText("表示ボタン設定（ドラッグ&&ドロップで移動できます）");
+
+        Label enabledButtonsLabel = new Label(toolWinGroup, SWT.NONE);
+        enabledButtonsLabel.setLayoutData(new GridData(SWT.CENTER, SWT.CENTER, false, false, 1, 1));
+        enabledButtonsLabel.setText("表示するボタン");
+
+        Label toolWinSeparator = new Label(toolWinGroup, SWT.SEPARATOR);
+        toolWinSeparator.setLayoutData(new GridData(SWT.CENTER, SWT.FILL, false, false, 1, 2));
+
+        Label disabledButtonsLabel = new Label(toolWinGroup, SWT.NONE);
+        disabledButtonsLabel.setLayoutData(new GridData(SWT.CENTER, SWT.CENTER, false, false, 1, 1));
+        disabledButtonsLabel.setText("表示しないボタン");
+
+        final Table enabledButtonTable = this.createToolButtonTable(toolWinGroup);
+        final Table disabledButtonTable = this.createToolButtonTable(toolWinGroup);
+
+        this.createToolButtonTableContents(enabledButtonTable, disabledButtonTable);
 
         // Development タブ
         compositeDevelopment.setLayout(new GridLayout(2, false));
@@ -1200,13 +1223,7 @@ public final class ConfigDialog extends Dialog {
                 AppConfig.get().setShowAkashiTimer(showAkashiTimer.getSelection());
                 AppConfig.get().setAkashiTimerFormat(akashiFormatCombo.getSelectionIndex());
                 AppConfig.get().setSeikuMethod(seikuCombo.getSelectionIndex());
-                if (useRecommendedSakuteki.getSelection()) {
-                    AppConfig.get().setUseRecommendedSakuteki(true);
-                }
-                else {
-                    AppConfig.get().setUseRecommendedSakuteki(false);
-                    AppConfig.get().setSakutekiMethod(sakutekiCombo.getSelectionIndex());
-                }
+                AppConfig.get().setSakutekiMethod(sakutekiCombo.getSelectionIndex());
                 // notify
                 AppConfig.get().setOkCond(condSpinner.getSelection());
                 AppConfig.get().setNoticeCondOnlyMainFleet(condOnlyMain.getSelection());
@@ -1276,6 +1293,14 @@ public final class ConfigDialog extends Dialog {
                 AppConfig.get().setPushPriorityAkashi(pushPriorityAkashiCombo.getSelectionIndex() - 2);
                 AppConfig.get().setPushPriorityCond(pushPriorityCondCombo.getSelectionIndex() - 2);
 
+                // ツールウィンドウ
+                List<String> toolButtons = AppConfig.get().getToolButtons();
+                toolButtons.clear();
+                for (TableItem item : enabledButtonTable.getItems()) {
+                    String key = (String) item.getData();
+                    toolButtons.add(key);
+                }
+
                 // development
                 AppConfig.get().setStoreJson(btnJson.getSelection());
                 AppConfig.get().setStoreJsonPath(new File(jsonpath.getText()).getAbsolutePath());
@@ -1341,6 +1366,104 @@ public final class ConfigDialog extends Dialog {
         return label;
     }
 
+    private Table createToolButtonTable(Composite parent) {
+        final Table table = new Table(parent, SWT.NONE);
+        GridData gd = new GridData(SWT.FILL, SWT.FILL, true, false, 1, 1);
+        gd.heightHint = 230;
+        gd.widthHint = 150;
+        table.setLayoutData(gd);
+        table.setHeaderVisible(false);
+        final TableColumn column = new TableColumn(table, SWT.NONE);
+        column.setText("ボタン");
+        table.addListener(SWT.Resize, new Listener() {
+            @Override
+            public void handleEvent(Event event) {
+                column.setWidth(table.getClientArea().width);
+            }
+        });
+        return table;
+    }
+
+    private void createToolButtonTableItems(Table table, List<String> keys, Map<String, Integer> keyMap) {
+        for (String key : keys) {
+            int i = keyMap.get(key);
+            String shortName = AppConstants.SHORT_WINDOW_NAME_LIST[i];
+            String name = AppConstants.WINDOW_NAME_LIST[i];
+
+            TableItem item = new TableItem(table, SWT.NONE);
+            item.setText(shortName + " (" + name + ")");
+            item.setData(key);
+        }
+    }
+
+    private void createToolButtonTableContents(final Table enabledTable, Table disabledTable) {
+
+        final WindowBase[] winList = LauncherWindow.getWindowList();
+        Map<String, Integer> winKeyMap = LauncherWindow.getWindowKeyMap();
+        List<String> toolButtons = AppConfig.get().getToolButtons();
+        if ((toolButtons == null) || (toolButtons.size() == 0)) {
+            // 初期化
+            toolButtons = new ArrayList<String>();
+            for (WindowBase win : winList) {
+                toolButtons.add(win.getWindowId());
+            }
+            AppConfig.get().setToolButtons(toolButtons);
+        }
+
+        Set<String> enabledSet = new HashSet<>();
+        for (String key : toolButtons) {
+            enabledSet.add(key);
+        }
+        List<String> disabledButtons = new ArrayList<>();
+        for (WindowBase win : winList) {
+            String key = win.getWindowId();
+            if (enabledSet.contains(key) == false) {
+                disabledButtons.add(key);
+            }
+        }
+        this.createToolButtonTableItems(enabledTable, toolButtons, winKeyMap);
+        this.createToolButtonTableItems(disabledTable, disabledButtons, winKeyMap);
+
+        SwtUtils.addItemDragAndDropMoveSupport(new Table[] { enabledTable, disabledTable },
+                new TableDragAndDropListener() {
+                    @Override
+                    public String tableItemToString(TableItem item) {
+                        return item.getText();
+                    }
+
+                    @Override
+                    public boolean canDragSource(TableItem source) {
+                        if ((source.getParent() == enabledTable)
+                                && (enabledTable.getItemCount() == 1)) {
+                            // 表示ボタンゼロにはできない
+                            return false;
+                        }
+                        return true;
+                    }
+
+                    @Override
+                    public TableItem create(Table table, TableItem source, int index) {
+                        TableItem item = new TableItem(table, SWT.NONE, index);
+                        item.setText(source.getText());
+                        item.setData(source.getData());
+                        return item;
+                    }
+
+                    @Override
+                    public void finished(TableItem newItem) {
+                        // do nothing
+                    }
+                });
+    }
+
+    private void selectPane(Composite selected) {
+        for (Control control : this.composite.getChildren()) {
+            LayoutLogic.hide(control, selected != control);
+        }
+        this.composite.layout();
+        this.scrolledComposite.setMinSize(this.composite.computeSize(SWT.DEFAULT, SWT.DEFAULT));
+    }
+
     /**
      * ツリーをクリックした時に呼び出されるアダプター
      *
@@ -1361,12 +1484,7 @@ public final class ConfigDialog extends Dialog {
         public void widgetSelected(SelectionEvent e) {
             Object data = e.item.getData();
             if (data instanceof Composite) {
-                Composite selected = (Composite) data;
-                for (Control control : this.dialog.composite.getChildren()) {
-                    LayoutLogic.hide(control, selected != control);
-                }
-                this.dialog.composite.layout();
-                this.dialog.scrolledComposite.setMinSize(this.dialog.composite.computeSize(SWT.DEFAULT, SWT.DEFAULT));
+                this.dialog.selectPane((Composite) data);
             }
         }
     }

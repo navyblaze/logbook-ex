@@ -5,6 +5,7 @@ IntegerPair = Java.type("logbook.gui.logic.IntegerPair");
 TimeString = Java.type("logbook.gui.logic.TimeString");
 HpString = Java.type("logbook.gui.logic.HpString");
 TimeLogic = Java.type("logbook.gui.logic.TimeLogic");
+Ship = Java.type("logbook.internal.Ship");
 
 function header() {
 	return [	"ID",
@@ -16,7 +17,7 @@ function header() {
 				"修理順", //
 				"名前",
 				"艦種",
-				"艦ID",//
+				"初期艦",//
 				"現在",//
 				"疲労",
 				"回復",
@@ -41,11 +42,11 @@ function begin(specdiff) {
 		ordermap[ship.ship.getId()] = ship.sortNumber;
 	}
 	missionShips = GlobalContext.getMissionShipSet();
-	ndockShips = GlobalContext.getNDockShipSet();
+	ndockMap = GlobalContext.getNDockCompleteTimeMap();
 }
 
 function getPageNumber(index) {
-	return new IntegerPair((index / 10) + 1, (index % 10) + 1, "-");
+	return new IntegerPair((index / 10) + 1, (index % 10) + 1, "%d-%d");
 }
 
 function getSokuryoku(soku) {
@@ -66,11 +67,19 @@ function body(ship) {
 		fleet = String(ship.fleetid + "-" + (ship.fleetpos + 1));
 	}
 
+	var origName = null;
+	if(ship.charId != 0) {
+		var origShip = Ship.get(ship.charId);
+		if(origShip != null) {
+			origName = origShip.name;
+		}
+	}
+
 	var now = null;
 	if (missionShips.contains(ship.id)) {
 		now = "遠征中";
 	}
-	else if (ndockShips.contains(ship.id)) {
+	else if (ndockMap.containsKey(ship.id)) {
 		now = "入渠中";
 	}
 
@@ -88,7 +97,7 @@ function body(ship) {
 		damage = "小破";
 	}
 
-	var condClearTime = ship.getCondClearTime(GlobalContext.getCondTiming());
+	var condClearTime = ship.getCondClearTime(GlobalContext.getCondTiming(), ndockMap.get(ship.id));
 
 	return toComparable([
 					ship.id,
@@ -100,7 +109,7 @@ function body(ship) {
 					getPageNumber(order[3]),
 					ship.name,
 					ship.type,
-					ship.charId,
+					origName,
 					now,
 					ship.cond,
 					(ship.cond < 49) ? new TimeString(condClearTime) : null,
