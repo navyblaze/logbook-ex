@@ -678,7 +678,7 @@ public final class AsyncExecApplicationMain extends Thread {
                 String time = "";
 
                 if (kdocks[i].getNowUsing()) {
-                    ShipInfoDto ship = Ship.get(String.valueOf(kdocks[i].getShipId()));
+                    ShipInfoDto ship = Ship.get(kdocks[i].getShipId());
                     if (ship.equals(ShipInfoDto.EMPTY)) {
                         name = "未知";
                     } else {
