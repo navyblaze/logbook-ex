@@ -221,6 +221,8 @@ public class BattleExDto extends AbstractDto {
         private double[] damageRate;
 
         /** 攻撃シーケンス */
+        @Tag(35)
+        private List<AirBattleDto> airBase = null;
         @Tag(11)
         private AirBattleDto air = null;
         @Tag(12)
@@ -274,10 +276,20 @@ public class BattleExDto extends AbstractDto {
 
             // 攻撃シーケンスを読み取る //
 
+            // 基地航空隊
+            JsonValue air_base_attack = object.get("api_air_base_attack");
+            if (air_base_attack instanceof JsonArray) {
+                this.airBase = new ArrayList<>();
+                for (JsonValue elem : (JsonArray) air_base_attack) {
+                    JsonObject obj = (JsonObject) elem;
+                    this.airBase.add(new AirBattleDto(obj, isCombined, true));
+                }
+            }
+
             // 航空戦（通常）
             JsonObject kouku = object.getJsonObject("api_kouku");
             if (kouku != null) {
-                this.air = new AirBattleDto(kouku, isCombined);
+                this.air = new AirBattleDto(kouku, isCombined, false);
                 // 昼戦の触接はここ
                 this.touchPlane = this.air.touchPlane;
                 // 制空はここから取る
@@ -311,7 +323,7 @@ public class BattleExDto extends AbstractDto {
             // 航空戦（連合艦隊のみ？）
             JsonObject kouku2 = object.getJsonObject("api_kouku2");
             if (kouku2 != null)
-                this.air2 = new AirBattleDto(kouku2, isCombined);
+                this.air2 = new AirBattleDto(kouku2, isCombined, false);
 
             // 開幕
             this.opening = BattleAtackDto.makeRaigeki(object.get("api_opening_atack"), kind.isOpeningSecond());
@@ -327,6 +339,9 @@ public class BattleExDto extends AbstractDto {
 
             // ダメージを反映 //
 
+            if (this.airBase != null)
+                for (AirBattleDto attack : this.airBase)
+                    this.doAtack(attack.atacks);
             if (this.air != null)
                 this.doAtack(this.air.atacks);
             this.doAtack(this.support);
@@ -472,59 +487,78 @@ public class BattleExDto extends AbstractDto {
             boolean equalOrMore = (enemyGaugeRate > (0.9 * friendGaugeRate));
             boolean superior = (enemyGaugeRate > 0) && (enemyGaugeRate > (2.5 * friendGaugeRate));
 
-            if (friendSunk == 0) { // 味方轟沈数ゼロ
-                if (enemyNowShips == 0) { // 敵を殲滅した
-                    if (friendGauge == 0) { // 味方ダメージゼロ
-                        return ResultRank.PERFECT;
-                    }
-                    return ResultRank.S;
+            if ((this.kind == BattlePhaseKind.LD_AIRBATTLE) ||
+                    (this.kind == BattlePhaseKind.COMBINED_LD_AIR)) {
+                // 空襲戦
+                if (friendGaugeRate == 0) {
+                    return ResultRank.PERFECT;
                 }
-                else {
-                    // 6隻の場合のみ4隻以上撃沈？
-                    if (numEships == 6) {
-                        if (enemySunk >= 4) {
+                if (friendGaugeRate <= 10) {
+                    return ResultRank.A;
+                }
+                if (friendGaugeRate <= 20) {
+                    return ResultRank.B;
+                }
+                if (friendGaugeRate <= 50) {
+                    return ResultRank.C;
+                }
+            }
+            else {
+                if (friendSunk == 0) { // 味方轟沈数ゼロ
+                    if (enemyNowShips == 0) { // 敵を殲滅した
+                        if (friendGauge == 0) { // 味方ダメージゼロ
+                            return ResultRank.PERFECT;
+                        }
+                        return ResultRank.S;
+                    }
+                    else {
+                        // 6隻の場合のみ4隻以上撃沈？
+                        if (numEships == 6) {
+                            if (enemySunk >= 4) {
+                                return ResultRank.A;
+                            }
+                        }
+                        // 半数以上撃沈？
+                        else if ((enemySunk * 2) >= numEships) {
                             return ResultRank.A;
                         }
+                        // 敵旗艦を撃沈
+                        if (this.nowEnemyHp[0] == 0) {
+                            return ResultRank.B;
+                        }
+                        // 戦果ゲージが2.5倍以上
+                        if (superior) {
+                            return ResultRank.B;
+                        }
                     }
-                    // 半数以上撃沈？
-                    else if ((enemySunk * 2) >= numEships) {
-                        return ResultRank.A;
+                }
+                else {
+                    // 敵を殲滅した
+                    if (enemyNowShips == 0) {
+                        return ResultRank.B;
                     }
-                    // 敵旗艦を撃沈
-                    if (this.nowEnemyHp[0] == 0) {
+                    // 敵旗艦を撃沈 and 味方轟沈数 < 敵撃沈数
+                    if ((this.nowEnemyHp[0] == 0) && (friendSunk < enemySunk)) {
                         return ResultRank.B;
                     }
                     // 戦果ゲージが2.5倍以上
                     if (superior) {
                         return ResultRank.B;
                     }
+                    // 敵旗艦を撃沈
+                    // TODO: 味方の轟沈艦が２隻以上ある場合、敵旗艦を撃沈してもDになる場合がある
+                    if (this.nowEnemyHp[0] == 0) {
+                        return ResultRank.C;
+                    }
+                }
+                // 敵に与えたダメージが一定以上 and 戦果ゲージが1.0倍以上
+                if (enemyGauge > 0) {
+                    if (equalOrMore) {
+                        return ResultRank.C;
+                    }
                 }
             }
-            else {
-                // 敵を殲滅した
-                if (enemyNowShips == 0) {
-                    return ResultRank.B;
-                }
-                // 敵旗艦を撃沈 and 味方轟沈数 < 敵撃沈数
-                if ((this.nowEnemyHp[0] == 0) && (friendSunk < enemySunk)) {
-                    return ResultRank.B;
-                }
-                // 戦果ゲージが2.5倍以上
-                if (superior) {
-                    return ResultRank.B;
-                }
-                // 敵旗艦を撃沈
-                // TODO: 味方の轟沈艦が２隻以上ある場合、敵旗艦を撃沈してもDになる場合がある
-                if (this.nowEnemyHp[0] == 0) {
-                    return ResultRank.C;
-                }
-            }
-            // 敵に与えたダメージが一定以上 and 戦果ゲージが1.0倍以上
-            if (enemyGauge > 0) {
-                if (equalOrMore) {
-                    return ResultRank.C;
-                }
-            }
+
             // 轟沈艦があり かつ 残った艦が１隻のみ
             if ((friendSunk > 0) && ((numFships - friendSunk) == 1)) {
                 return ResultRank.E;
@@ -580,14 +614,28 @@ public class BattleExDto extends AbstractDto {
             return list.toArray(new BattleAtackDto[list.size()]);
         }
 
+        private BattleAtackDto[] getAirBaseBattlesArray() {
+            if (this.airBase == null) {
+                return null;
+            }
+            List<BattleAtackDto> arr = new ArrayList<>();
+            for (AirBattleDto dto : this.airBase) {
+                if (dto.atacks != null) {
+                    arr.addAll(dto.atacks);
+                }
+            }
+            return arr.toArray(new BattleAtackDto[0]);
+        }
+
         /**
          * 攻撃の全シーケンスを取得
-         * [ 航空戦1, 支援艦隊の攻撃, 航空戦2, 開幕, 夜戦, 砲撃戦1, 雷撃, 砲撃戦2, 砲撃戦3 ]
+         * [ 基地航空隊航空戦, 航空戦1, 支援艦隊の攻撃, 航空戦2, 開幕, 夜戦, 砲撃戦1, 雷撃, 砲撃戦2, 砲撃戦3 ]
          * 各戦闘がない場合はnullになる
          * @return
          */
         public BattleAtackDto[][] getAtackSequence() {
             return new BattleAtackDto[][] {
+                    this.getAirBaseBattlesArray(),
                     ((this.air == null) || (this.air.atacks == null)) ? null :
                             this.toArray(this.air.atacks),
                     this.support == null ? null : this.toArray(this.support),
@@ -836,6 +884,13 @@ public class BattleExDto extends AbstractDto {
          */
         public int[] getFlarePos() {
             return this.flarePos;
+        }
+
+        /**
+         * @return airBase
+         */
+        public List<AirBattleDto> getAirBase() {
+            return this.airBase;
         }
     }
 
