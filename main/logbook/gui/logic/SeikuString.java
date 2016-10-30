@@ -16,8 +16,8 @@ import logbook.dto.ShipBaseDto;
 public class SeikuString implements Comparable<SeikuString> {
 
     private static int[][] alevelBonusTable = new int[][] {
-            { 0, 0, 2, 5, 9, 14, 14, 22 }, // 艦上戦闘機
-            { 0, 0, 0, 0, 0, 0, 0, 0 }, // 艦上爆撃機、艦上攻撃機、水上戦闘機
+            { 0, 0, 2, 5, 9, 14, 14, 22 }, // 艦上戦闘機、水上戦闘機
+            { 0, 0, 0, 0, 0, 0, 0, 0 }, // 艦上爆撃機、艦上攻撃機
             { 0, 0, 1, 1, 1, 3, 3, 6 }, // 水上爆撃機
     };
 
@@ -57,11 +57,11 @@ public class SeikuString implements Comparable<SeikuString> {
                 int type;
                 switch (item.getType2()) {
                 case 6: // 艦上戦闘機
+                case 45: // 水上戦闘機
                     type = 0;
                     break;
                 case 7: // 艦上爆撃機
                 case 8: // 艦上攻撃機
-                case 45: // 水上戦闘機
                     type = 1;
                     break;
                 case 11: // 水上爆撃機
@@ -79,7 +79,19 @@ public class SeikuString implements Comparable<SeikuString> {
                         return;
                     }
 
-                    double basePart = item.getParam().getTyku() * Math.sqrt(ship.getOnSlot()[i]);
+                    double tyku = item.getParam().getTyku();
+
+                    // 改修効果 艦戦は★×0.2、爆戦は★×0.25
+                    switch (type) {
+                    case 0: // 艦上戦闘機 （水上戦闘機は不明だけど一応入れておく）
+                        tyku += item.getLevel() * 0.2;
+                        break;
+                    case 1: // 爆戦（爆戦でない艦上爆撃機や艦上攻撃機は不明だけど一応入れておく）
+                        tyku += item.getLevel() * 0.25;
+                        break;
+                    }
+
+                    double basePart = tyku * Math.sqrt(ship.getOnSlot()[i]);
 
                     double ialvMin = internalAlevelTable[item.getAlv()];
                     double ialvMax = internalAlevelTable[item.getAlv() + 1] - 1;
