@@ -6,11 +6,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import logbook.constants.AppConstants;
-import logbook.dto.ShipFilterDto;
-
 import org.apache.commons.io.FilenameUtils;
 import org.eclipse.swt.graphics.RGB;
+
+import logbook.constants.AppConstants;
+import logbook.dto.ShipFilterDto;
 
 /**
  * アプリケーションの設定
@@ -253,7 +253,7 @@ public final class AppConfigBean {
     private int seikuMethod = 0;
 
     /** 索敵表示形式 */
-    private int sakutekiMethod = 0;
+    private int sakutekiMethodV4 = 0;
 
     /** タスクバー通知を使用する */
     private boolean useTaskbarNotify = true;
@@ -333,6 +333,9 @@ public final class AppConfigBean {
     /** ツールウィンドウのボタンをトグル方式にする */
     private boolean toggleToolButton = true;
 
+    /** サブウィンドウのホストウィンドウを表示する */
+    private boolean showSubwindowHost = true;
+
     /** 艦娘一覧ウィンドウの名前 */
     private String[] shipTableNames = new String[] {
             "所有艦娘一覧 1",
@@ -376,6 +379,21 @@ public final class AppConfigBean {
 
     /** ツールウィンドウに表示するボタン設定 */
     private List<String> toolButtons = new ArrayList<>();
+
+    /** 第一艦隊のデータをデッキビルダーの生成に使うか */
+    private boolean useCopyDeckBuilder1 = true;
+
+    /** 第二艦隊のデータをデッキビルダーの生成に使うか */
+    private boolean useCopyDeckBuilder2 = true;
+
+    /** 第三艦隊のデータをデッキビルダーの生成に使うか */
+    private boolean useCopyDeckBuilder3 = true;
+
+    /** 第四艦隊のデータをデッキビルダーの生成に使うか */
+    private boolean useCopyDeckBuilder4 = true;
+
+    /** 所持艦隊晒しの対象をロックしている艦限定にするか */
+    private boolean useLockedOnlyFleetFormat = false;
 
     private static RGB cloneRGB(RGB rgb) {
         return new RGB(rgb.red, rgb.green, rgb.blue);
@@ -1415,16 +1433,16 @@ public final class AppConfigBean {
      * 索敵値の表示形式を取得します。
      * @return 索敵値の表示形式
      */
-    public int getSakutekiMethod() {
-        return this.sakutekiMethod;
+    public int getSakutekiMethodV4() {
+        return this.sakutekiMethodV4;
     }
 
     /**
      * 索敵値の表示形式を設定します。
      * @param sakutekiMethod 索敵値の表示形式
      */
-    public void setSakutekiMethod(int sakutekiMethod) {
-        this.sakutekiMethod = sakutekiMethod;
+    public void setSakutekiMethodV4(int sakutekiMethod) {
+        this.sakutekiMethodV4 = sakutekiMethod;
     }
 
     /**
@@ -2122,6 +2140,90 @@ public final class AppConfigBean {
      */
     public void setToolButtons(List<String> toolButtons) {
         this.toolButtons = toolButtons;
+    }
+
+    /**
+     * @return showSubwindowHost
+     */
+    public boolean isShowSubwindowHost() {
+        return this.showSubwindowHost;
+    }
+
+    /**
+     * @param showSubwindowHost セットする showSubwindowHost
+     */
+    public void setShowSubwindowHost(boolean showSubwindowHost) {
+        this.showSubwindowHost = showSubwindowHost;
+    }
+
+    /**
+     * @return useCopyDeckBuilder1
+     */
+    public boolean isUseCopyDeckBuilder1() {
+        return this.useCopyDeckBuilder1;
+    }
+
+    /**
+     * @param useCopyDeckBuilder1 セットする useCopyDeckBuilder1
+     */
+    public void setUseCopyDeckBuilder1(boolean useCopyDeckBuilder1) {
+        this.useCopyDeckBuilder1 = useCopyDeckBuilder1;
+    }
+
+    /**
+     * @return useCopyDeckBuilder2
+     */
+    public boolean isUseCopyDeckBuilder2() {
+        return this.useCopyDeckBuilder2;
+    }
+
+    /**
+     * @param useCopyDeckBuilder2 セットする useCopyDeckBuilder2
+     */
+    public void setUseCopyDeckBuilder2(boolean useCopyDeckBuilder2) {
+        this.useCopyDeckBuilder2 = useCopyDeckBuilder2;
+    }
+
+    /**
+     * @return useCopyDeckBuilder3
+     */
+    public boolean isUseCopyDeckBuilder3() {
+        return this.useCopyDeckBuilder3;
+    }
+
+    /**
+     * @param useCopyDeckBuilder3 セットする useCopyDeckBuilder3
+     */
+    public void setUseCopyDeckBuilder3(boolean useCopyDeckBuilder3) {
+        this.useCopyDeckBuilder3 = useCopyDeckBuilder3;
+    }
+
+    /**
+     * @return useCopyDeckBuilder4
+     */
+    public boolean isUseCopyDeckBuilder4() {
+        return this.useCopyDeckBuilder4;
+    }
+
+    /**
+     * @param useCopyDeckBuilder4 セットする useCopyDeckBuilder4
+     */
+    public void setUseCopyDeckBuilder4(boolean useCopyDeckBuilder4) {
+        this.useCopyDeckBuilder4 = useCopyDeckBuilder4;
+    }
+
+    /**
+     * @return useLockedOnlyFleetFormat
+     */
+    public boolean isUseLockedOnlyFleetFormat() {
+        return this.useLockedOnlyFleetFormat;
+    }
+
+    /**
+     * @param useLockedOnlyFleetFormat セットする useLockedOnlyFleetFormat
+     */
+    public void setUseLockedOnlyFleetFormat(boolean useLockedOnlyFleetFormat) {
+        this.useLockedOnlyFleetFormat = useLockedOnlyFleetFormat;
     }
 
 }
